@@ -1,0 +1,20 @@
+/*
+ * The MCU/Linux internal UART (LPUART1, Linux /dev/ttyHS1 = /dev/mcu-console)
+ * carries the LED matrix service (MCUmgr SMP). Console text stays on the
+ * board's default USART1 header pins (D1/TX, D0/RX).
+ */
+/ {
+	chosen {
+		zephyr,uart-mcumgr = &lpuart1;
+	};
+};
+
+/* LED matrix scan timer (as in Arduino's board variants) */
+&timers17 {
+	status = "okay";
+	st,prescaler = <4>;
+
+	counter_matrix: counter {
+		status = "okay";
+	};
+};

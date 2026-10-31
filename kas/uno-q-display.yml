@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# The UNO Q display: Arduino's kernel (linux-arduino 7.0) with the Media
+# Carrier and Waveshare 5" DSI panel device tree and the panel modules. The
+# QLI 2.x locks otherwise build linux-qcom 6.18, which has neither the Media
+# Carrier overlays nor the Waveshare GPIO driver. Boards without the carrier
+# boot it too; the panel just isn't there. Step 1's full update:
+#   ./build-os.sh --kasfile uno-q.yml --overlay kas/demo-health.yml --overlay kas/uno-q-display.yml
+# The device tree is in the UKI, so an OS update switches it with the kernel.
+
+header:
+  version: 14
+
+local_conf_header:
+  uno-q-display: |
+    PREFERRED_PROVIDER_virtual/kernel:uno-q = "linux-arduino"
+    KERNEL_DEVICETREE:uno-q = "qcom/qrb2210-arduino-imola-carrier-media-panel-5in.dtb"
+    QCOM_DTB_DEFAULT:uno-q = "qrb2210-arduino-imola-carrier-media-panel-5in"
+    # core-image-full-cmdline doesn't install MACHINE_EXTRA_RRECOMMENDS
+    IMAGE_INSTALL:append:uno-q = " kernel-module-gpio-waveshare-dsi kernel-module-panel-himax-hx8394 kernel-module-goodix-ts"

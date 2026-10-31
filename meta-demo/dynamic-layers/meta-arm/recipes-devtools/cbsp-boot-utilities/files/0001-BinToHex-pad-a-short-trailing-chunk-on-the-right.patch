@@ -1,0 +1,36 @@
+From d631399a6c466be72565dba5865983e414df411b Mon Sep 17 00:00:00 2001
+From: Michael Scott <mike@foundries.io>
+Date: Mon, 12 Oct 2026 18:33:27 -0700
+Subject: [PATCH] BinToHex: pad a short trailing chunk on the right
+
+A file whose size is not a multiple of 4 ends in a partial chunk.
+zfill() pads it on the left, so the chunk's bytes land at the low end
+of the final 32-bit cell and the DTB copy ends in zeros instead of
+the file's last bytes: a 934-byte QcFMPRoot.cer loses its last two
+bytes, '5965' becoming 0x00005965. Pad on the right instead, so
+reading the length-prefixed cells back yields the original file.
+
+Upstream-Status: Pending
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Signed-off-by: Michael Scott <mike@foundries.io>
+---
+ uefi_capsule_generation/src/qcom_capsule_tool/BinToHex.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/uefi_capsule_generation/src/qcom_capsule_tool/BinToHex.py b/uefi_capsule_generation/src/qcom_capsule_tool/BinToHex.py
+index 5bdd2db..d6dfc93 100644
+--- a/uefi_capsule_generation/src/qcom_capsule_tool/BinToHex.py
++++ b/uefi_capsule_generation/src/qcom_capsule_tool/BinToHex.py
+@@ -23,7 +23,7 @@ def bin_to_hex(input_file, output_file):
+         chunk = binary_data[i : i + 4]
+         hex_chunk = "".join(f"{byte:02x}" for byte in chunk)
+         # Ensure each chunk is 8 hex digits.
+-        hex_chunks.append(hex_chunk.zfill(8))
++        hex_chunks.append(hex_chunk.ljust(8, "0"))
+ 
+     try:
+         with open(output_file, "w") as f:
+-- 
+2.56.0
+

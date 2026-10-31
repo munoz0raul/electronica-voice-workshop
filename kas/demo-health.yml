@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# Adds the Health remote action (meta-demo demo-health). The demo's step 0
+# UNO Q image leaves it out, so Health fails on its cards until an OS update
+# built with this overlay installs it:
+#   ./build-os.sh --kasfile uno-q.yml --overlay kas/demo-health.yml
+
+header:
+  version: 14
+
+local_conf_header:
+  demo-health: |
+    IMAGE_INSTALL:append = " demo-health"

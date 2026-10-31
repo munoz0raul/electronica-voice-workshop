@@ -1,0 +1,2 @@
+# Demo check-in interval for fioconfig, in seconds (default 300)
+DAEMON_INTERVAL=@FIOCONFIG_INTERVAL@

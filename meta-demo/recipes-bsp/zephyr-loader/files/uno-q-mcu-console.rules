@@ -1,0 +1,4 @@
+# The UNO Q MCU console is STM32 LPUART1 on the internal UART, which Linux
+# names ttyHS1 through the device tree's serial1 alias. Give apps the same
+# /dev/mcu-console name as on VENTUNO Q.
+SUBSYSTEM=="tty", KERNEL=="ttyHS1", SYMLINK+="mcu-console"

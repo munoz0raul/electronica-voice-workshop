@@ -1,0 +1,229 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: MIT
+"""Validate and load a machine's ARM ELF into MCU SRAM over onboard SWD."""
+
+import argparse
+import fcntl
+import glob
+import json
+import os
+from pathlib import Path
+import re
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+
+
+def number(value):
+    return int(value, 0) if isinstance(value, str) else int(value)
+
+
+def within_ram(address, size, regions):
+    return any(base <= address and address + size <= base + length for base, length in regions)
+
+
+def validate_image(path, config):
+    image = path.read_bytes()
+    if len(image) < 52 or image[:7] != b"\x7fELF\x01\x01\x01":
+        raise ValueError("firmware must be a little-endian ELF32 image")
+    header = struct.unpack_from("<16sHHIIIIIHHHHHH", image)
+    if header[1] != 2 or header[2] != 40:
+        raise ValueError("firmware must be an executable ARM ELF")
+    entry, phoff, phsize, phnum = header[4], header[5], header[9], header[10]
+    if phsize != 32 or not 0 < phnum <= 256 or phoff + phsize * phnum > len(image):
+        raise ValueError("invalid ELF program header table")
+    regions = [(number(r["base"]), number(r["size"])) for r in config["ram"]]
+    if not regions or any(base < 0 or length <= 0 for base, length in regions):
+        raise ValueError("invalid configured SRAM regions")
+    segments = []
+    for index in range(phnum):
+        kind, offset, vaddr, paddr, filesz, memsz, _, _ = struct.unpack_from(
+            "<IIIIIIII", image, phoff + index * phsize
+        )
+        if kind != 1:
+            continue
+        if filesz > memsz or offset + filesz > len(image):
+            raise ValueError("invalid ELF load segment")
+        if vaddr != paddr or not within_ram(paddr, memsz, regions):
+            raise ValueError(f"load segment at {paddr:#x} is not RAM-linked; rebuild with --mode ram")
+        segments.append((paddr, memsz, image[offset:offset + filesz]))
+    if not segments:
+        raise ValueError("firmware has no loadable segments")
+    vectors = number(config["vector_base"])
+    vector_data = None
+    for address, _, data in segments:
+        offset = vectors - address
+        if 0 <= offset and offset + 8 <= len(data):
+            vector_data = data[offset:offset + 8]
+            break
+    if vector_data is None:
+        raise ValueError("firmware does not contain the configured SRAM vector table")
+    stack, reset = struct.unpack("<II", vector_data)
+    if stack % 8 or not any(base < stack <= base + length for base, length in regions):
+        raise ValueError("initial stack pointer is outside SRAM or unaligned")
+    if reset != entry or not reset & 1 or not within_ram(reset & ~1, 2, regions):
+        raise ValueError("reset handler and ELF entry must identify executable Thumb code in SRAM")
+    return vectors, stack, reset, sum(size for _, size, _ in segments)
+
+
+def gpio_controller(config, gpio_numbers, wait_seconds=10):
+    # Linux's gpiochip numbering follows probe order. Identify the controller
+    # by its kernel label using GPIO_GET_CHIPINFO_IOCTL instead of a fixed index.
+    deadline = time.monotonic() + wait_seconds
+    label = config.get("gpio_controller")
+    pattern = config.get("gpio_controller_regex")
+    if not label and not pattern:
+        raise ValueError("machine config must identify its GPIO controller")
+    while True:
+        candidates = []
+        for device in sorted(glob.glob("/dev/gpiochip*")):
+            try:
+                with open(device, "rb", buffering=0) as chip:
+                    info = bytearray(68)
+                    fcntl.ioctl(chip.fileno(), 0x8044B401, info, True)
+                _, chip_label, lines = struct.unpack("32s32sI", info)
+            except OSError:
+                continue
+            actual_label = chip_label.split(b"\0", 1)[0].decode()
+            if label and actual_label != label:
+                continue
+            if pattern and not re.fullmatch(pattern, actual_label):
+                continue
+            if any(pin < 0 or pin >= lines for pin in gpio_numbers):
+                continue
+            candidates.append(int(Path(device).name.removeprefix("gpiochip")))
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            raise ValueError("multiple GPIO controllers match; configure an exact kernel label")
+        if time.monotonic() >= deadline:
+            raise ValueError(f"GPIO controller {label or pattern!r} was not found")
+        time.sleep(0.2)
+
+
+def hold_gpio_low(chip_path, line):
+    """Request one GPIO line as an output driven low; returns the line fd."""
+    request = bytearray(592)  # struct gpio_v2_line_request
+    struct.pack_into("<I", request, 0, line)
+    request[256:256 + 15] = b"zephyr-loader\0\0"
+    struct.pack_into("<Q", request, 288, 1 << 3)  # GPIO_V2_LINE_FLAG_OUTPUT, value 0
+    struct.pack_into("<I", request, 560, 1)  # num_lines
+    with open(chip_path, "rb", buffering=0) as chip:
+        fcntl.ioctl(chip.fileno(), 0xC250B407, request, True)  # GPIO_V2_GET_LINE_IOCTL
+    return struct.unpack_from("<i", request, 588)[0]
+
+
+def tcl_string(value):
+    value = str(value)
+    for character in ('\\', '"', '$', '[', ']'):
+        value = value.replace(character, '\\' + character)
+    return '"' + value.replace('\n', '\\n').replace('\r', '\\r') + '"'
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--machine", required=True)
+    parser.add_argument("--firmware-dir", type=Path, default=Path("/usr/lib/firmware"))
+    parser.add_argument("--config-dir", type=Path, default=Path("/usr/share/zephyr-loader"))
+    parser.add_argument("--openocd", default="/usr/bin/openocd-zephyr")
+    parser.add_argument("--scripts", type=Path, action="append")
+    parser.add_argument("--validate-only", action="store_true")
+    args = parser.parse_args()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", args.machine):
+        raise ValueError("invalid machine name")
+    firmware = args.firmware_dir / f"zephyr-{args.machine}.elf"
+    config = json.loads((args.config_dir / f"{args.machine}.json").read_text())
+    vectors, stack, reset, memory = validate_image(firmware, config)
+    print(f"{firmware}: validated RAM image, {memory} bytes reserved, entry {reset:#x}", flush=True)
+    if args.validate_only:
+        return
+    reset_gpio = number(config["reset_gpio"])
+    swclk = number(config["swclk_gpio"])
+    swdio = number(config["swdio_gpio"])
+    if len({reset_gpio, swclk, swdio}) != 3:
+        raise ValueError("reset, SWCLK and SWDIO must use distinct GPIOs")
+    chip = gpio_controller(config, [reset_gpio, swclk, swdio])
+    target = config["target"]
+    if not re.fullmatch(r"[a-zA-Z0-9_.-]+", target):
+        raise ValueError("invalid OpenOCD target name")
+    flash_vector = config.get("flash_entry_vector")
+    if flash_vector is None:
+        # Halt on the reset vector through the reset GPIO.
+        reset_cmds = "reset_config srst_only srst_push_pull"
+        halt_cmds = "reset halt"
+    else:
+        # The STM32H5 boot ROM runs with debug access closed after any reset,
+        # so a reset-vector catch never fires. Hold BOOT0 low so the ROM
+        # starts user flash, and stop on a hardware breakpoint at the flash
+        # firmware's reset handler: a clean reset state before any of its
+        # code runs. Halting later, e.g. in ST's system bootloader, inherits
+        # its TrustZone setup (secure GPIOs, unusable interrupts).
+        reset_cmds = "reset_config none"
+        halt_cmds = f"""halt 1000
+set entry [{target} read_memory {number(flash_vector):#x} 32 1]
+if {{($entry & 1) == 0 || $entry == 0xffffffff}} {{
+    error "no valid firmware in flash (reset vector [format 0x%08x $entry])"
+}}
+bp [expr {{$entry & ~1}}] 2 hw
+reset run
+wait_halt 2000
+rbp all
+mww 0xe000ed0c 0x05fa0002
+mww 0xe000e010 0
+reg primask 0
+reg control 0"""
+    commands = f"""
+gdb port disabled
+tcl port disabled
+telnet port disabled
+adapter driver linuxgpiod
+adapter gpio srst {reset_gpio} -chip {chip}
+adapter gpio swclk {swclk} -chip {chip}
+adapter gpio swdio {swdio} -chip {chip}
+transport select swd
+set CHIPNAME {tcl_string(config['chip_name'])}
+set CPU_AP {number(config['cpu_ap'])}
+set WORKAREASIZE 0
+source [find {tcl_string(config['target_config'])}]
+{reset_cmds}
+init
+targets {target}
+{halt_cmds}
+{target} configure -work-area-size 0
+echo [load_image {tcl_string(firmware)}]
+echo [verify_image {tcl_string(firmware)}]
+mww 0xe000ed08 {vectors:#x}
+reg msp {stack:#x}
+reg pc {reset & ~1:#x}
+reg xpsr 0x01000000
+resume
+shutdown
+"""
+    with tempfile.TemporaryDirectory(prefix="zephyr-loader-") as directory:
+        script = Path(directory) / "load.cfg"
+        script.write_text(commands)
+        command = [args.openocd]
+        for scripts in [args.config_dir, *(args.scripts or [Path("/usr/share/zephyr-tools/openocd/scripts")])]:
+            command.extend(["-s", str(scripts)])
+        command.extend(["-f", str(script)])
+        boot0 = None
+        if "boot0_gpio" in config:
+            boot0 = hold_gpio_low(f"/dev/gpiochip{chip}", number(config["boot0_gpio"]))
+        try:
+            subprocess.run(command, check=True, timeout=60)
+        finally:
+            # Releasing the line leaves it driven low, so later MCU resets
+            # also start user flash rather than ST's system bootloader.
+            if boot0 is not None:
+                os.close(boot0)
+    print(f"{args.machine}: MCU started from SRAM", flush=True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, OSError, KeyError, struct.error, subprocess.SubprocessError) as error:
+        print(f"zephyr-loader: {error}", file=sys.stderr)
+        sys.exit(1)

@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+
+header:
+  version: 14
+
+  includes:
+    - repo: meta-foundries
+      file: ci/include/base.yml
+
+repos:
+  meta-foundries:
+    url: https://github.com/foundriesio/meta-foundries
+    branch: main
+    commit: f2c3e05fd5d6d7c9c9e210719297e2ac648e2128
+
+local_conf_header:
+  ci: |
+    SOTA_SKIP_CRED_WARN = "1"
+
+  cmdline: |
+    # Replaces meta-qcom ci/base.yml's "cmdline" section, which enables crash
+    # dumps (qcom_scm.download_mode=1): after a crash the board waited in the
+    # boot firmware's USB crash-dump mode instead of rebooting.
+    KERNEL_CMDLINE_EXTRA:append = " qcom_scm.download_mode=0"
+
+  fio: |
+    # The update-server on the VENTUNO Q (meta-demo update-server)
+    FIO_DEVICE_API = "http://demo-server.local:8080/v1/devices"
+    FIO_OAUTH_API = "http://demo-server.local:8080/oauth2"
+    # Devices register with this tag and take only targets carrying it:
+    # upload every update with it (docs/DEMO-SETUP.md)
+    LMP_FACTORY_TAG = "main"
+    IMAGE_INSTALL:append = " sudo"
+
+  demo-wifi: |
+    # VENTUNO Q runs the demo Wi-Fi AP; UNO Qs join it (meta-demo demo-wifi)
+    IMAGE_INSTALL:append = " demo-wifi"
+
+  hostname: |
+    # Unique hostname <machine>-<SoC serial>, e.g. uno-q-2560466998
+    # (meta-demo lmp-auto-hostname, from meta-lmp)
+    IMAGE_INSTALL:append = " lmp-auto-hostname"
+
+  networkd: |
+    # NetworkManager runs the network. Without this, systemd recommends
+    # systemd-networkd into images that do not exclude it (UNO Q's
+    # core-image-full-cmdline; qcom-minimal-image does), and its wait-online
+    # service, with no interface to manage, holds network-online.target, and
+    # so Docker and the apps, for its full 2-minute timeout on every boot.
+    BAD_RECOMMENDATIONS += "systemd-networkd"
+
+  fioefi: |
+    # Apply the firmware capsule an OS update carries: aktualizr-lite's
+    # fioefi bootloader mode, with meta-demo's fioefi staging the capsule on
+    # the ESP for UEFI when its version differs from the running firmware's
+    IMAGE_INSTALL:append = " fioefi"
+
+  sysinfo: |
+    # OS, kernel and firmware report for the dashboard: a fioconfig remote
+    # action (meta-demo demo-sysinfo)
+    IMAGE_INSTALL:append = " demo-sysinfo"
+
+  demo-reset: |
+    # Lets the dashboard's Reset install the earlier step 0 updates: clears
+    # aktualizr-lite's stored TUF metadata, keeping root (meta-demo demo-reset)
+    IMAGE_INSTALL:append = " demo-reset"
+
+  demo-shutdown: |
+    # The dashboard's Shutdown the Demo: UNO Qs halt, VENTUNO Q powers off
+    # (meta-demo demo-shutdown)
+    IMAGE_INSTALL:append = " demo-shutdown"
+
+  memory-report: |
+    # Memory report for leak hunting over long runs (tools/memwatch.sh): a
+    # fioconfig remote action (meta-demo demo-memory)
+    IMAGE_INSTALL:append = " demo-memory"
+
+  auto-downgrade: |
+    # Let a rollout move devices to an older update: aktualizr-lite otherwise
+    # installs only targets with a higher version, and resetting the demo
+    # rolls the base update out again (docs/DEMO-RESET.md).
+    PACKAGECONFIG:append:pn-aktualizr-lite = " auto-downgrade"
+
+  demo-polling: |
+    # Fleet checks for updates and configs every 5 s (meta-demo demo-polling)
+    IMAGE_INSTALL:append = " demo-polling"
+
+  lighting-poc: |
+    # Lighting PoC: chrony clock sync (meta-demo bbappend configures the
+    # VENTUNO Q server and UNO Q clients) plus capture/load-test tools
+    IMAGE_INSTALL:append = " chrony chronyc tcpdump iperf3 iw"

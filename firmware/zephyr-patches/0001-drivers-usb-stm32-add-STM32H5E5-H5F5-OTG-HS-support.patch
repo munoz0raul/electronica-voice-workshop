@@ -1,0 +1,254 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Michael Scott <mike@foundries.io>
+Date: Wed, 14 Oct 2026 15:19:24 -0700
+Subject: [PATCH] drivers: usb: stm32: add STM32H5E5/H5F5 OTG HS support
+
+Port the OTG HS controller node, the embedded HS PHY driver and binding,
+and the OTGHS_SEL clock selector from Arduino's Zephyr fork
+(zephyr-arduino-v4.4.2, commit bdd066a67b7168d6975bb49536b719729d209f90),
+which drives the VENTUNO Q STM32H5F5 USB port. Upstream v4.4.2 has no
+H5E5/H5F5 OTG HS support.
+---
+ drivers/usb/common/stm32/CMakeLists.txt       |  1 +
+ drivers/usb/common/stm32/Kconfig              |  6 ++
+ drivers/usb/common/stm32/phy_h5otghs.c        | 95 +++++++++++++++++++
+ drivers/usb/common/stm32/stm32_usb_common.h   |  3 +-
+ dts/arm/st/h5/stm32h5e5.dtsi                  | 21 ++++
+ dts/bindings/phy/st,stm32h5-otghs-phy.yaml    | 38 ++++++++
+ .../zephyr/dt-bindings/clock/stm32h5_clock.h  |  1 +
+ 7 files changed, 164 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/usb/common/stm32/phy_h5otghs.c
+ create mode 100644 dts/bindings/phy/st,stm32h5-otghs-phy.yaml
+
+diff --git a/drivers/usb/common/stm32/CMakeLists.txt b/drivers/usb/common/stm32/CMakeLists.txt
+index 339f8fdf..3126bbb1 100644
+--- a/drivers/usb/common/stm32/CMakeLists.txt
++++ b/drivers/usb/common/stm32/CMakeLists.txt
+@@ -35,4 +35,5 @@ if(CONFIG_STM32_USB_COMMON)
+     zephyr_library_sources_ifdef(CONFIG_SOC_SERIES_STM32N6X phy_usbphyc_n6.c)
+   endif()
+   zephyr_library_sources_ifdef(CONFIG_STM32_PHY_U5OTGHSPHY phy_u5otghs.c)
++  zephyr_library_sources_ifdef(CONFIG_STM32_PHY_H5OTGHSPHY phy_h5otghs.c)
+ endif()
+diff --git a/drivers/usb/common/stm32/Kconfig b/drivers/usb/common/stm32/Kconfig
+index bbfc04dc..ad1d607f 100644
+--- a/drivers/usb/common/stm32/Kconfig
++++ b/drivers/usb/common/stm32/Kconfig
+@@ -21,6 +21,12 @@ config STM32_PHY_U5OTGHSPHY
+ 	help
+ 	  Enable STM32 U5OTGHS embedded High-Speed PHY driver.
+ 
++config STM32_PHY_H5OTGHSPHY
++	def_bool y
++	depends on DT_HAS_ST_STM32H5_OTGHS_PHY_ENABLED
++	help
++	  Enable STM32 H5OTGHS embedded High-Speed PHY driver.
++
+ module = STM32_USB_COMMON
+ module-str = STM32 USB common code
+ source "subsys/logging/Kconfig.template.log_config"
+diff --git a/drivers/usb/common/stm32/phy_h5otghs.c b/drivers/usb/common/stm32/phy_h5otghs.c
+new file mode 100644
+index 00000000..3a45e984
+--- /dev/null
++++ b/drivers/usb/common/stm32/phy_h5otghs.c
+@@ -0,0 +1,95 @@
++/*
++ * Copyright (c) 2025 STMicroelectronics
++ *
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++/*
++ * STM32H5 (H5E5/H5F5) embedded OTG HS PHY driver
++ *
++ * Ported from Arduino's Zephyr fork (zephyr-arduino-v4.4.2, bdd066a6).
++ * The PHY reference clock is HSE/2 (24 MHz with the VENTUNO Q's 48 MHz
++ * HSE), set here regardless of the second DT clock entry.
++ */
++#include <soc.h>
++#include <stm32_ll_system.h>
++
++#include <stm32_bitops.h>
++
++#include <zephyr/device.h>
++#include <zephyr/drivers/clock_control.h>
++#include <zephyr/drivers/clock_control/stm32_clock_control.h>
++#include <zephyr/sys/util.h>
++#include <zephyr/toolchain.h>
++
++#include "stm32_usb_common.h"
++
++#include <stm32h5xx_ll_rcc.h>
++#include <stm32h5xx_hal_pwr_ex.h>
++
++/* Even though we won't use this macro, define it for grep-ability */
++#define DT_DRV_COMPAT st_stm32h5_otghs_phy
++
++struct stm32_h5otghs_phy_config {
++	uint32_t num_clocks;
++	struct stm32_pclken clocks[];
++};
++
++static const struct device *rcc = DEVICE_DT_GET(STM32_CLOCK_CONTROL_NODE);
++
++static int stm32_h5otghs_phy_enable(const struct stm32_usb_phy *phy)
++{
++	const struct stm32_h5otghs_phy_config *cfg = phy->pcfg;
++	int res;
++
++	/* Configure PHY input mux (if provided) */
++	if (cfg->num_clocks > 1) {
++		res = clock_control_configure(rcc, (clock_control_subsys_t)&cfg->clocks[1], NULL);
++		if (res != 0) {
++			return res;
++		}
++	}
++
++	/* Turn on the PHY's clock */
++	res = clock_control_on(rcc, (clock_control_subsys_t)&cfg->clocks[0]);
++
++	__HAL_RCC_USB_OTG_HS_CLK_ENABLE();
++
++	LL_RCC_SetOTGPHYClockSource(LL_RCC_OTGPHYREFCKCLKSOURCE_24M);
++	__HAL_RCC_OTGHS_CONFIG(RCC_OTGHSCLKSOURCE_HSE_DIV2);
++
++	stm32_reg_set_bits(&PWR->USBSCR, PWR_USBSCR_OTGHSEN);
++
++	return res;
++}
++
++static int stm32_h5otghs_phy_disable(const struct stm32_usb_phy *phy)
++{
++	const struct stm32_h5otghs_phy_config *cfg = phy->pcfg;
++
++	stm32_reg_clear_bits(&PWR->USBSCR, PWR_USBSCR_OTGHSEN);
++
++	return clock_control_off(rcc, (clock_control_subsys_t)&cfg->clocks[0]);
++}
++
++#define DEFINE_H5OTGHS_PHY(usb_node, phy_node)							\
++	static const struct stm32_h5otghs_phy_config CONCAT(phy, DT_DEP_ORD(phy_node), _cfg) = {\
++		.num_clocks = DT_NUM_CLOCKS(phy_node),						\
++		.clocks = STM32_DT_CLOCKS(phy_node)						\
++	};											\
++	const struct stm32_usb_phy USB_STM32_PHY_PSEUDODEV_NAME(usb_node) = {			\
++		.enable = stm32_h5otghs_phy_enable,						\
++		.disable = stm32_h5otghs_phy_disable,						\
++		.pcfg = &CONCAT(phy, DT_DEP_ORD(phy_node), _cfg),				\
++	};
++
++/*
++ * Iterate all USB nodes and instantiate PHY when appropriate.
++ * We could implement a stricter check but this should suffice;
++ * there are no series with different type of embedded HS PHYs.
++ */
++#define _FOREACH_NODE(usb_node)									\
++	IF_ENABLED(USB_STM32_NODE_PHY_IS_EMBEDDED_HS(usb_node),					\
++		(DEFINE_H5OTGHS_PHY(usb_node, USB_STM32_PHY(usb_node))))
++#define _FOREACH_COMPAT(compat) DT_FOREACH_STATUS_OKAY(compat, _FOREACH_NODE)
++FOR_EACH(_FOREACH_COMPAT, (), STM32_USB_COMPATIBLES)
+diff --git a/drivers/usb/common/stm32/stm32_usb_common.h b/drivers/usb/common/stm32/stm32_usb_common.h
+index 7713902e..e0381eb4 100644
+--- a/drivers/usb/common/stm32/stm32_usb_common.h
++++ b/drivers/usb/common/stm32/stm32_usb_common.h
+@@ -34,7 +34,8 @@
+  */
+ #define USB_STM32_NODE_PHY_IS_EMBEDDED_HS(usb_node)					\
+ 	UTIL_OR(DT_NODE_HAS_COMPAT(USB_STM32_PHY(usb_node), st_stm32_usbphyc),		\
+-		DT_NODE_HAS_COMPAT(USB_STM32_PHY(usb_node), st_stm32u5_otghs_phy))
++		UTIL_OR(DT_NODE_HAS_COMPAT(USB_STM32_PHY(usb_node), st_stm32u5_otghs_phy),	\
++			DT_NODE_HAS_COMPAT(USB_STM32_PHY(usb_node), st_stm32h5_otghs_phy)))
+ 
+ /*
+  * Evaluates to 1 if PHY of `usb_node` is an embedded FS PHY, 0 otherwise.
+diff --git a/dts/arm/st/h5/stm32h5e5.dtsi b/dts/arm/st/h5/stm32h5e5.dtsi
+index c274162c..a3e22b46 100644
+--- a/dts/arm/st/h5/stm32h5e5.dtsi
++++ b/dts/arm/st/h5/stm32h5e5.dtsi
+@@ -9,5 +9,26 @@
+ / {
+ 	soc {
+ 		compatible = "st,stm32h5e5", "st,stm32h5", "simple-bus";
++
++		usbotg_hs: otghs@42040000 {
++			compatible = "st,stm32-otghs";
++			reg = <0x42040000 0x20000>;
++			interrupts = <161 0>;
++			interrupt-names = "otghs";
++			num-bidir-endpoints = <9>;
++			ram-size = <4096>;
++			maximum-speed = "high-speed";
++			clocks = <&rcc STM32_CLOCK(AHB2, 14)>;
++			phys = <&otghs_phy>;
++			status = "disabled";
++		};
++	};
++
++	otghs_phy: otghs_phy {
++		compatible = "st,stm32h5-otghs-phy";
++		clocks = <&rcc STM32_CLOCK(AHB2, 13)>,
++			 <&rcc STM32_SRC_HSE OTGHS_SEL(0)>;
++		#phy-cells = <0>;
++		status = "disabled";
+ 	};
+ };
+diff --git a/dts/bindings/phy/st,stm32h5-otghs-phy.yaml b/dts/bindings/phy/st,stm32h5-otghs-phy.yaml
+new file mode 100644
+index 00000000..2031a0d8
+--- /dev/null
++++ b/dts/bindings/phy/st,stm32h5-otghs-phy.yaml
+@@ -0,0 +1,38 @@
++# Copyright (c) 2024 Marcin Niestroj
++# Copyright (c) 2024 Meta
++# SPDX-License-Identifier: Apache-2.0
++
++description: |
++    STM32H5 OTG HS PHY.
++
++    This binding is to be used by the STM32H5xx transceivers which are built-in
++    with USB HS PHY IP and a configurable HSE clock source.
++
++compatible: "st,stm32h5-otghs-phy"
++
++include: phy-controller.yaml
++
++properties:
++  "#phy-cells":
++    const: 0
++
++  clocks:
++    required: true
++    description: |
++      Supported configurations:
++
++        /* HSE */
++        clocks = <&rcc STM32_CLOCK(AHB2, 13)>,
++                 <&rcc STM32_SRC_HSE OTGHS_SEL(0)>;
++
++        /* HSE/2 */
++        clocks = <&rcc STM32_CLOCK(AHB2, 13)>,
++                 <&rcc (STM32_SRC_HSE | STM32_CLOCK_DIV(2)) OTGHS_SEL(2)>;
++
++        /* PLL1_P_CK */
++        clocks = <&rcc STM32_CLOCK(AHB2, 13)>,
++                 <&rcc STM32_SRC_PLL1_P OTGHS_SEL(1)>;
++
++        /* PLL1_P_CK/2 */
++        clocks = <&rcc STM32_CLOCK(AHB2, 13)>,
++                 <&rcc (STM32_SRC_PLL1_P | STM32_CLOCK_DIV(2)) OTGHS_SEL(3)>;
+diff --git a/include/zephyr/dt-bindings/clock/stm32h5_clock.h b/include/zephyr/dt-bindings/clock/stm32h5_clock.h
+index f702a0fb..cae835f9 100644
+--- a/include/zephyr/dt-bindings/clock/stm32h5_clock.h
++++ b/include/zephyr/dt-bindings/clock/stm32h5_clock.h
+@@ -106,6 +106,7 @@
+ #define USB_SEL(val)		STM32_DT_CLOCK_SELECT((val), 5, 4, CCIPR4_REG)
+ #define SDMMC1_SEL(val)		STM32_DT_CLOCK_SELECT((val), 6, 6, CCIPR4_REG)
+ #define SDMMC2_SEL(val)		STM32_DT_CLOCK_SELECT((val), 7, 7, CCIPR4_REG)
++#define OTGHS_SEL(val)		STM32_DT_CLOCK_SELECT((val), 11, 10, CCIPR4_REG)
+ #define I2C1_SEL(val)		STM32_DT_CLOCK_SELECT((val), 17, 16, CCIPR4_REG)
+ #define I2C2_SEL(val)		STM32_DT_CLOCK_SELECT((val), 19, 18, CCIPR4_REG)
+ #define I2C3_SEL(val)		STM32_DT_CLOCK_SELECT((val), 21, 20, CCIPR4_REG)
+-- 
+2.56.0
+

@@ -1,0 +1,11 @@
+#!/bin/sh -e
+# SPDX-License-Identifier: MIT
+# fioconfig remote action: shut the board down, for the dashboard's
+# "Shutdown the Demo".
+#
+# The command runs 5 s from now, from a transient systemd timer.
+# fioconfig-oneshot records this run's COMMAND_ID once the action returns, and
+# fioconfig re-runs every handler at boot: only that record keeps the board
+# from shutting down again each time it starts.
+systemd-run --on-active=5 @COMMAND@
+echo "Shutting down in 5 s: @COMMAND@"

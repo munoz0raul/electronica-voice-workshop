@@ -1,0 +1,206 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+
+header:
+  version: 14
+
+  includes:
+    - repo: meta-qcom-arduino
+      file: ci/uno-q.yml
+    - repo: meta-qcom
+      file: ci/qcom-distro-sota.yml
+    - repo: meta-qcom
+      file: ci/performance.yml
+    - repo: meta-qcom
+      file: ci/base.lock.yml
+    - repo: meta-qcom
+      file: ci/capsule.yml
+    - repo: meta-qcom
+      file: ci/capsule-test-keys.yml
+    - repo: meta-qcom
+      file: ci/meta-arm.yml
+    - common.yml
+
+target: core-image-full-cmdline
+repos:
+  # this repo: local layer with the demo's OS-side pieces
+  oss-2026-foundries-demo:
+    layers:
+      meta-demo:
+  # Branch and commit: a lock file in locks/ (build-os.sh --lock)
+  meta-qcom-arduino:
+    url: https://github.com/qualcomm-linux/meta-qcom-arduino
+  meta-qcom:
+    url: https://github.com/qualcomm-linux/meta-qcom
+  meta-ai:
+    # meta-qcom's ci/qcom-distro.yml adds meta-ai (onnxruntime, tflite,
+    # llama-cpp); the demo uses none of it.
+    layers:
+      .: disabled
+
+local_conf_header:
+  zephyr-firmware: |
+    IMAGE_INSTALL:append:uno-q = " zephyr-firmware zephyr-loader"
+
+  rootfs-growth: |
+    # Grow /sysroot to fill its partition on first boot (meta-qcom-distro
+    # resize-rootfs), as meta-foundries' ci/uno-q.yml does. Without it the
+    # flashed 1.3 GB filesystem fills up and app updates fail.
+    IMAGE_INSTALL:append:uno-q = " resize-rootfs"
+
+  capsule-in-image: |
+    # Put the firmware capsule (meta-qcom ci/capsule.yml) in the OS image.
+    # meta-qcom adds it as a machine recommendation, which only images with
+    # packagegroup-base-extended install (the VENTUNO Q's qcom-console-image
+    # does); core-image-full-cmdline sets its own package list without it.
+    IMAGE_INSTALL:append:uno-q = " ${VIRTUAL-RUNTIME_qcom-capsule-firmware}"
+
+  uno-q-edk2: |
+    # Boot through the edk2-based QRB2210 firmware (meta-demo backport)
+    # instead of the u-boot based firmware wrynose ships, as
+    # meta-qcom-arduino 6150f7d did: only the edk2 firmware takes UEFI
+    # capsules, which the demo's firmware updates need. The machine config
+    # is parsed after local.conf and assigns these with "=", hence the
+    # :uno-q overrides.
+    PREFERRED_PROVIDER_virtual/bootloader:uno-q = ""
+    MACHINE_ESSENTIAL_EXTRA_RRECOMMENDS:remove:uno-q = "qbootctl"
+    QCOM_CDT_FILE:uno-q = "cdt_arduino_imola"
+    QCOM_BOOT_FILES_SUBDIR:uno-q = "qrb2210"
+    QCOM_PARTITION_FILES_SUBDIR:uno-q = "partitions/qrb2210-unoq/emmc-16GB"
+    QCOM_BOOT_FIRMWARE:uno-q = "firmware-qcom-boot-qrb2210"
+    QCOM_CDT_FIRMWARE:uno-q = "firmware-qcom-cdt-uno-q"
+
+  uno-q-nokaslr: |
+    # The edk2 firmware's memory map doesn't reserve the rmtfs region
+    # (0x89b01000, device tree only), so the EFI stub's randomized kernel
+    # placement sometimes lands on it. The reservation then fails, rmtfs
+    # can't start the modem and Wi-Fi never comes up. nokaslr keeps the
+    # kernel at a fixed, lower address. OTA deployments inherit the running
+    # deployment's arguments, so this only reaches newly flashed boards.
+    KERNEL_CMDLINE_EXTRA:append:uno-q = " nokaslr"
+
+  uno-q-sensors: |
+    # qcom-sensors-binaries (pulled in by qcom-multimedia-proprietary-image)
+    # enables sscrpcd, which spawns the ADSP sensors PD. There is no sensor
+    # registry for this board, so the PD asserts in SNS_REG_INIT and takes
+    # the whole ADSP down in a crash/recover loop.
+    SYSTEMD_AUTO_ENABLE:pn-qcom-sensors-binaries = "disable"
+
+  capsule-board: |
+    # FMP ESRT GUID read from the Uno Q board:
+    # /sys/firmware/efi/esrt/entries/entry0/fw_class
+    CAPSULE_GUID = "a2c156d8-abbf-49b4-9f3d-8c134dde977b"
+    # qcom-capsule-tool encodes "a.b.c.d" as (c << 16) | d -- a and b are
+    # dropped, so bump only the last two fields. The board's ESRT
+    # fw_version is 65536 (0x10000, "0.0.1.0"); 0.0.1.2 = 0x10002.
+    CAPSULE_FW_VERSION = "0.0.1.2"
+    CAPSULE_FW_LSV = "0.0.1.1"
+
+    # Uno Q (QRB2210) boots from eMMC (512-byte sectors): the whole A/B
+    # boot stack lives in the user-data area GPT (rawprogram0/gpt_main0,
+    # the only physical partition).
+    CAPSULE_FLASH_TYPE = "EMMC"
+
+    # Capsule payload: every *_a boot-stack partition rawprogram0.xml
+    # programs with an image, all on EMMC_PARTITION_USER_DATA. Updating
+    # the full set together keeps the boot stack consistent -- a partial
+    # mix boot-loops. Dest *_a, Backup *_b: qcom-capsule-tool's XmlParser
+    # requires a Backup on every FwEntry, and without one fv-create
+    # silently emits an empty FV. GUIDs are the partition type GUIDs in
+    # the build's gpt_main0.bin (hyp_b/devcfg_b use the QCS6490 values,
+    # not the QCS9100/QCS8300 ones).
+    # Omitted: xbl_config, multiimgqti (partitions exist but the build
+    # ships no image), apdp and misc_boot (zeros placeholders), and qupfw:
+    # qupfw_b's type GUID duplicates devcfg_b's (169534E7-...) in this
+    # GPT, so an update resolved by GUID could land in devcfg_b.
+    CAPSULE_ENTRIES = "xbl tz rpm hyp uefi uefi_dtb dtb imagefv uefisecapp devcfg multiimgoem"
+
+    CAPSULE_ENTRY_xbl[binary] = "xbl.elf"
+    CAPSULE_ENTRY_xbl[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_xbl[dest_partition] = "xbl_a"
+    CAPSULE_ENTRY_xbl[dest_guid] = "{DEA0BA2C-CBDD-4805-B4F9-F428251C3E98}"
+    CAPSULE_ENTRY_xbl[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_xbl[backup_partition] = "xbl_b"
+    CAPSULE_ENTRY_xbl[backup_guid] = "{7A3DF1A3-A31A-454D-BD78-DF259ED486BE}"
+
+    CAPSULE_ENTRY_tz[binary] = "tz.mbn"
+    CAPSULE_ENTRY_tz[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_tz[dest_partition] = "tz_a"
+    CAPSULE_ENTRY_tz[dest_guid] = "{A053AA7F-40B8-4B1C-BA08-2F68AC71A4F4}"
+    CAPSULE_ENTRY_tz[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_tz[backup_partition] = "tz_b"
+    CAPSULE_ENTRY_tz[backup_guid] = "{C832EA16-8B0D-4398-A67B-EBB30EF98E7E}"
+
+    CAPSULE_ENTRY_rpm[binary] = "rpm.mbn"
+    CAPSULE_ENTRY_rpm[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_rpm[dest_partition] = "rpm_a"
+    CAPSULE_ENTRY_rpm[dest_guid] = "{098DF793-D712-413D-9D4E-89D711772228}"
+    CAPSULE_ENTRY_rpm[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_rpm[backup_partition] = "rpm_b"
+    CAPSULE_ENTRY_rpm[backup_guid] = "{EDE665C0-9F65-47D9-A8C1-73D61EF3C7D6}"
+
+    CAPSULE_ENTRY_hyp[binary] = "hypvm.mbn"
+    CAPSULE_ENTRY_hyp[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_hyp[dest_partition] = "hyp_a"
+    CAPSULE_ENTRY_hyp[dest_guid] = "{E1A6A689-0C8D-4CC6-B4E8-55A4320FBD8A}"
+    CAPSULE_ENTRY_hyp[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_hyp[backup_partition] = "hyp_b"
+    CAPSULE_ENTRY_hyp[backup_guid] = "{CB45ECA0-504E-42BB-91BA-C9B3236F6A6E}"
+
+    CAPSULE_ENTRY_uefi[binary] = "uefi.elf"
+    CAPSULE_ENTRY_uefi[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_uefi[dest_partition] = "uefi_a"
+    CAPSULE_ENTRY_uefi[dest_guid] = "{400FFDCD-22E0-47E7-9A23-F16ED9382388}"
+    CAPSULE_ENTRY_uefi[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_uefi[backup_partition] = "uefi_b"
+    CAPSULE_ENTRY_uefi[backup_guid] = "{9F234B5B-0EFB-4313-8E4C-0AF1F605536B}"
+
+    CAPSULE_ENTRY_uefi_dtb[binary] = "uefi_dtbs.elf"
+    CAPSULE_ENTRY_uefi_dtb[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_uefi_dtb[dest_partition] = "uefi_dtb_a"
+    CAPSULE_ENTRY_uefi_dtb[dest_guid] = "{C84D3B5E-EF34-4FA4-8118-30EAE18D3FA6}"
+    CAPSULE_ENTRY_uefi_dtb[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_uefi_dtb[backup_partition] = "uefi_dtb_b"
+    CAPSULE_ENTRY_uefi_dtb[backup_guid] = "{5F7D760A-3EF5-4AA5-B915-69A4ECAAE662}"
+
+    # entry key must be exactly "dtb": qcom-capsule.bbclass only stages
+    # dtb.bin (from dtb-${QCOM_DTB_DEFAULT}-image.vfat) and depends on the
+    # kernel deploy when it finds that word in CAPSULE_ENTRIES.
+    CAPSULE_ENTRY_dtb[binary] = "dtb.bin"
+    CAPSULE_ENTRY_dtb[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_dtb[dest_partition] = "dtb_a"
+    CAPSULE_ENTRY_dtb[dest_guid] = "{2A1A52FC-AA0B-401C-A808-5EA0F91068F8}"
+    CAPSULE_ENTRY_dtb[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_dtb[backup_partition] = "dtb_b"
+    CAPSULE_ENTRY_dtb[backup_guid] = "{A166F11A-2B39-4FAA-B7E7-F8AA080D0587}"
+
+    CAPSULE_ENTRY_imagefv[binary] = "imagefv.elf"
+    CAPSULE_ENTRY_imagefv[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_imagefv[dest_partition] = "imagefv_a"
+    CAPSULE_ENTRY_imagefv[dest_guid] = "{17911177-C9E6-4372-933C-804B678E666F}"
+    CAPSULE_ENTRY_imagefv[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_imagefv[backup_partition] = "imagefv_b"
+    CAPSULE_ENTRY_imagefv[backup_guid] = "{920CFC3D-7285-4A47-9C1C-4A87590E0687}"
+
+    CAPSULE_ENTRY_uefisecapp[binary] = "uefi_sec.mbn"
+    CAPSULE_ENTRY_uefisecapp[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_uefisecapp[dest_partition] = "uefisecapp_a"
+    CAPSULE_ENTRY_uefisecapp[dest_guid] = "{BE8A7E08-1B7A-4CAE-993A-D5B7FB55B3C2}"
+    CAPSULE_ENTRY_uefisecapp[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_uefisecapp[backup_partition] = "uefisecapp_b"
+    CAPSULE_ENTRY_uefisecapp[backup_guid] = "{538CBDBA-D4A4-4438-A466-D7B356FAC165}"
+
+    CAPSULE_ENTRY_devcfg[binary] = "devcfg_iot.mbn"
+    CAPSULE_ENTRY_devcfg[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_devcfg[dest_partition] = "devcfg_a"
+    CAPSULE_ENTRY_devcfg[dest_guid] = "{F65D4B16-343D-4E25-AAFC-BE99B6556A6D}"
+    CAPSULE_ENTRY_devcfg[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_devcfg[backup_partition] = "devcfg_b"
+    CAPSULE_ENTRY_devcfg[backup_guid] = "{169534E7-7809-4240-9763-0BA5DC37B5FF}"
+
+    CAPSULE_ENTRY_multiimgoem[binary] = "multi_image.mbn"
+    CAPSULE_ENTRY_multiimgoem[dest_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_multiimgoem[dest_partition] = "multiimgoem_a"
+    CAPSULE_ENTRY_multiimgoem[dest_guid] = "{E126A436-757E-42D0-8D19-0F362F7A62B8}"
+    CAPSULE_ENTRY_multiimgoem[backup_disk] = "EMMC_PARTITION_USER_DATA"
+    CAPSULE_ENTRY_multiimgoem[backup_partition] = "multiimgoem_b"
+    CAPSULE_ENTRY_multiimgoem[backup_guid] = "{3E3E3ECD-C512-4F95-9144-6063826A8970}"

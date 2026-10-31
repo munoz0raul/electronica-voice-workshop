@@ -1,0 +1,19 @@
+[Unit]
+Description=Demo Wi-Fi access point (hostapd)
+# NetworkManager's AP mode (wpa_supplicant) stalls every client for a beacon
+# interval several times a second on the QCA2066; hostapd does not.
+BindsTo=sys-subsystem-net-devices-@IFACE@.device
+After=sys-subsystem-net-devices-@IFACE@.device NetworkManager.service
+# BindsTo stops DHCP if hostapd exits; bring it back whenever the AP recovers.
+Upholds=demo-wifi-dhcp.service
+
+[Service]
+# Falls back to a fixed channel if automatic channel selection fails
+ExecStart=/usr/libexec/demo-wifi/demo-wifi-ap-run @SYSCONFDIR@/demo-wifi/hostapd.conf @SYSCONFDIR@/demo-wifi/hostapd-fallback.conf
+ExecStartPost=/usr/sbin/ip addr replace @AP_ADDRESS@ dev @IFACE@
+# hostapd exits with status 0 when it can't start the AP, so restart on any exit
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

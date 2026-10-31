@@ -1,0 +1,175 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+#
+# fioefi for Qualcomm UEFI firmware capsules. Based on meta-lmp's fioefi
+# (Copyright (C) 2024 Foundries.IO), which leaves the SoC part to each
+# platform.
+#
+# aktualizr-lite's "fioefi" bootloader mode (rollback_mode = "fioefi") calls
+# fioefi_printenv <variable> and fioefi_setenv <variable> <value>:
+#
+#   bootfirmware_version   The running firmware's version: the UEFI ESRT entry
+#                          for the board's capsule GUID. aktualizr-lite
+#                          compares it with the new OS's
+#                          /usr/lib/firmware/version.txt.
+#   bootupgrade_available  1 while a capsule waits for the next boot. Setting
+#                          it to 1 copies the new OS deployment's capsule
+#                          (FIO_OSTREE_TARGET_SYSROOT, else the running OS) to
+#                          \EFI\UpdateCapsule on the ESP; UEFI applies it on
+#                          the next boot and deletes it.
+#   rollback_protection    0: no rollback protection.
+#
+# Boot counting (bootcount, upgrade_available, rollback) is not implemented:
+# the images boot without it, so those read as 0 and setting them does
+# nothing.
+set -e
+
+CAPSULE_GUID="@CAPSULE_GUID@"
+CAPSULE_NAME="@CAPSULE_NAME@"
+
+ESRT=/sys/firmware/efi/esrt/entries
+ESP=/boot
+STAGE_DIR="$ESP/EFI/UpdateCapsule"
+STAGED="$STAGE_DIR/$CAPSULE_NAME"
+# The boot in which the capsule was staged, to spot one UEFI did not apply
+STATE=/var/lib/fioefi/staged-boot-id
+EFIVARS=/sys/firmware/efi/efivars
+EFI_GLOBAL=8be4df61-93ca-11d2-aa0d-00e098032b8c
+FILE_CAPSULE_DELIVERY=4
+
+log() {
+	echo "fioefi: $*" >&2
+}
+
+boot_id() {
+	cat /proc/sys/kernel/random/boot_id
+}
+
+firmware_version() {
+	for entry in "$ESRT"/*; do
+		if [ "$(cat "$entry/fw_class" 2>/dev/null)" = "$CAPSULE_GUID" ]; then
+			cat "$entry/fw_version"
+			return 0
+		fi
+	done
+	log "no ESRT entry for $CAPSULE_GUID"
+	return 1
+}
+
+# Whether a capsule waits for the next boot. UEFI deletes a capsule once it has
+# processed it, so one still there after a reboot was not applied (rejected,
+# for example older than the lowest supported version). Remove it, or the boot
+# firmware update would count as in progress forever.
+staged() {
+	if [ ! -e "$STAGED" ]; then
+		rm -f "$STATE"
+		return 1
+	fi
+	if [ -r "$STATE" ] && [ "$(cat "$STATE")" != "$(boot_id)" ]; then
+		log "the capsule staged before the last boot was not applied; removing it"
+		rm -f "$STAGED" "$STATE"
+		sync
+		return 1
+	fi
+	return 0
+}
+
+# Little-endian integer from an efivarfs file, after its 4-byte attributes
+efivar_value() {
+	value=0
+	scale=1
+	for byte in $(od -An -tu1 -j4 -N8 "$1"); do
+		value=$((value + byte * scale))
+		scale=$((scale * 256))
+	done
+	echo "$value"
+}
+
+# $1 as $2 little-endian bytes
+le_bytes() {
+	value=$1
+	i=0
+	while [ "$i" -lt "$2" ]; do
+		printf "\\$(printf %03o $((value & 255)))"
+		value=$((value >> 8))
+		i=$((i + 1))
+	done
+}
+
+# Ask UEFI to look for capsules on disk (UEFI 8.5.5), when it supports that.
+# Qualcomm's UEFI also finds them without it.
+request_capsule_delivery() {
+	supported="$EFIVARS/OsIndicationsSupported-$EFI_GLOBAL"
+	var="$EFIVARS/OsIndications-$EFI_GLOBAL"
+	[ -r "$supported" ] || return 0
+	[ $(($(efivar_value "$supported") & FILE_CAPSULE_DELIVERY)) -ne 0 ] || return 0
+	current=0
+	if [ -e "$var" ]; then
+		current=$(efivar_value "$var")
+		chattr -i "$var" 2>/dev/null || true
+	fi
+	tmp=$(mktemp)
+	# Attributes NON_VOLATILE | BOOTSERVICE_ACCESS | RUNTIME_ACCESS, then the
+	# 64-bit value; efivarfs needs the variable in a single write
+	{ le_bytes 7 4; le_bytes $((current | FILE_CAPSULE_DELIVERY)) 8; } > "$tmp"
+	rc=0
+	cat "$tmp" > "$var" || rc=1
+	rm -f "$tmp"
+	return $rc
+}
+
+stage() {
+	src="${FIO_OSTREE_TARGET_SYSROOT:-}/usr/lib/firmware/efi/$CAPSULE_NAME"
+	if [ ! -r "$src" ]; then
+		log "no capsule at $src"
+		return 1
+	fi
+	mkdir -p "$STAGE_DIR"
+	# Copy beside the directory, then rename into it: UEFI never sees a
+	# partial capsule
+	cp "$src" "$ESP/EFI/.$CAPSULE_NAME.tmp"
+	sync
+	mv "$ESP/EFI/.$CAPSULE_NAME.tmp" "$STAGED"
+	sync
+	mkdir -p "${STATE%/*}"
+	boot_id > "$STATE"
+	request_capsule_delivery || log "could not set OsIndications; UEFI finds the capsule on the ESP anyway"
+	log "staged $src for the next boot"
+}
+
+unstage() {
+	rm -f "$STAGED" "$STATE"
+	sync
+}
+
+printenv() {
+	case "$1" in
+	bootfirmware_version)
+		firmware_version
+		;;
+	bootupgrade_available)
+		if staged; then echo 1; else echo 0; fi
+		;;
+	rollback_protection | bootcount | upgrade_available | rollback)
+		echo 0
+		;;
+	esac
+}
+
+setenv() {
+	case "$1" in
+	bootupgrade_available)
+		if [ "$2" = 1 ]; then stage; else unstage; fi
+		;;
+	esac
+}
+
+case "$(basename "$0")" in
+*printenv) printenv "$1" ;;
+*setenv) setenv "$1" "$2" ;;
+*delenv) if [ "$1" = bootupgrade_available ]; then unstage; fi ;;
+*)
+	echo "usage: fioefi_printenv <variable> | fioefi_setenv <variable> <value>" >&2
+	exit 1
+	;;
+esac

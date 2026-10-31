@@ -1,0 +1,14 @@
+services:
+  status-page:
+    image: demo-server.local/status-page:latest
+    restart: always
+    # Host network: reach the update-server on localhost:8080 and serve :8081.
+    network_mode: host
+    volumes:
+      # The Bearer token (status-token or dashboard-token), delivered by
+      # fioconfig. Read only; nothing is committed to the repo.
+      - /run/secrets:/run/secrets:ro
+    environment:
+      UPDATE_SERVER: "http://localhost:8080"
+      PORT: "8081"
+      POLL_S: "5"

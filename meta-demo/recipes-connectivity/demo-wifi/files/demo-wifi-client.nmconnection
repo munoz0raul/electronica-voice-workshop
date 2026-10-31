@@ -1,0 +1,29 @@
+[connection]
+id=demo-wifi
+uuid=54fea0e2-ffda-57b0-bed6-0ebd73dbf726
+type=wifi
+autoconnect=true
+autoconnect-priority=100
+autoconnect-retries=0
+
+[wifi]
+mode=infrastructure
+ssid=@SSID@
+# Keep stations awake so multicast lighting sync isn't held for DTIM wakeups.
+powersave=2
+# Keep the factory MAC that 70-wlan-mac.rules sets before NetworkManager
+# manages the interface.
+cloned-mac-address=preserve
+
+[wifi-security]
+key-mgmt=wpa-psk
+proto=rsn
+pairwise=ccmp
+group=ccmp
+psk=@PSK@
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=disabled

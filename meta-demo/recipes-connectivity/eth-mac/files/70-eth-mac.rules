@@ -1,0 +1,4 @@
+# Apply a stable Ethernet MAC (see set-eth-mac). RUN runs after
+# 80-net-setup-link.rules' MACAddressPolicy, so this address wins. Pass the
+# ifindex, not $name: the interface is renamed before RUN executes.
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="qcom-ethqos", RUN+="/usr/libexec/eth-mac/set-eth-mac $attr{ifindex}"

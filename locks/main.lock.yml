@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# The Qualcomm layers' main branches, at vetted commits (2026-10-16). The
+# blacksail release series; os-release reads 2.99+snapshot-<revision>.
+# meta-foundries stays at common.yml's commit: its later changes are not
+# vetted.
+
+header:
+  version: 14
+
+repos:
+  meta-qcom:
+    branch: master
+    commit: 0e92a4cb7e7d163ad804de5ed0cbceb5b6dce8ad
+  meta-qcom-arduino:
+    branch: main
+    commit: 8a1eae1e4df01437aa4ed1b4f0357d99173b8832
+  meta-foundries:
+    branch: main
+    commit: bfb1a4989b46dffac5563c46734523c80303c46f
+
+overrides:
+  repos:
+    # Declared by meta-qcom's ci/qcom-distro.yml (branch main); master's
+    # ci/base.lock.yml does not pin it
+    meta-qcom-distro:
+      commit: d4aac44c0e27d8fc5b0c7b4cd8486549967cf270
+
+local_conf_header:
+  main-capsule: |
+    # The main build carries firmware capsule 1.4 (ESRT 65540), one past
+    # QLI 2.1.1's, so updating to it flashes the firmware too (fioefi).
+    # forcevariable: wins over the machine kas file's CAPSULE_FW_VERSION.
+    CAPSULE_FW_VERSION:forcevariable = "0.0.1.4"

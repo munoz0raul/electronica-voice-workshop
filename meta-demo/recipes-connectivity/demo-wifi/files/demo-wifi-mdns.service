@@ -1,0 +1,12 @@
+[Unit]
+Description=Publish the demo server name over mDNS
+Requires=avahi-daemon.service
+After=avahi-daemon.service demo-wifi-ap.service
+
+[Service]
+ExecStart=/usr/bin/avahi-publish -a -R @SERVER_NAME@ @AP_IP@
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

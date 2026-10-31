@@ -1,0 +1,20 @@
+/*
+ * The VENTUNO Q MCU reaches Linux only over USB: the board's CDC ACM UART
+ * (Linux /dev/mcu-console) carries the LED matrix service (MCUmgr SMP).
+ * Console text stays on the board's default USART3.
+ */
+/ {
+	chosen {
+		zephyr,uart-mcumgr = &board_cdc_acm_uart;
+	};
+};
+
+/* LED matrix scan timer (as in Arduino's board variants) */
+&timers17 {
+	status = "okay";
+	st,prescaler = <4>;
+
+	counter_matrix: counter {
+		status = "okay";
+	};
+};

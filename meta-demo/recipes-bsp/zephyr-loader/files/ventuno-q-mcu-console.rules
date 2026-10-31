@@ -1,0 +1,4 @@
+# The VENTUNO Q MCU firmware's console is a USB CDC ACM device (Zephyr's
+# 2fe3:0004 test IDs, so also match the product string). Give apps a stable
+# name instead of ttyACM numbering or the per-board serial number.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2fe3", ATTRS{idProduct}=="0004", ATTRS{product}=="VENTUNO Q MCU", SYMLINK+="mcu-console", ENV{ID_MM_DEVICE_IGNORE}="1"

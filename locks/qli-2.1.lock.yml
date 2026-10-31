@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# QLI 2.1: the release the demo ships, and build-os.sh's default lock.
+# meta-qcom's ci/base.lock.yml pins oe-core, meta-qcom-distro and the
+# other layers for its commit.
+
+header:
+  version: 14
+
+repos:
+  meta-qcom:
+    branch: wrynose
+    # qli-2.1
+    commit: ea0fdcc27decd59c3e9bc81dcacf9c5f9a65a062
+  meta-qcom-arduino:
+    branch: wrynose
+    commit: 4042ec57bbdf65459110d5045ca2772b0b614951
+  meta-foundries:
+    branch: wrynose
+    commit: 62d0067d3dc241ad761894afa8a79f6060348733

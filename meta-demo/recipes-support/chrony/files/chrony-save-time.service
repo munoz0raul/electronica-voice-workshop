@@ -1,0 +1,18 @@
+# Keep the clock's last known time for the next boot. There's no
+# battery-backed RTC, and chronyd -s restores the clock from the drift file's
+# modification time, but a chronyd with no time source of its own (the
+# VENTUNO Q serving the demo network) never rewrites the file. Touching it
+# periodically (chrony-save-time.timer) and at shutdown keeps that time
+# current, so a boot without internet starts close to the right time.
+[Unit]
+Description=Save the time for chronyd -s at the next boot
+After=chronyd.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/touch -c /var/lib/chrony/drift
+ExecStop=/usr/bin/touch -c /var/lib/chrony/drift
+
+[Install]
+WantedBy=multi-user.target

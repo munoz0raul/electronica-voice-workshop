@@ -1,0 +1,7 @@
+# One periodic save for chrony-save-time.timer
+[Unit]
+Description=Save the time for chronyd -s
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/touch -c /var/lib/chrony/drift

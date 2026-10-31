@@ -1,0 +1,13 @@
+#!/bin/sh
+# Run the demo access point. With automatic channel selection, hostapd can
+# fail to collect survey data on the QCA2066 and exit with status 0, leaving
+# no network; fall back to the fixed-channel config when it exits.
+conf="$1"
+fallback="$2"
+
+/usr/sbin/hostapd "$conf"
+status=$?
+[ -n "$fallback" ] && [ -r "$fallback" ] || exit "$status"
+
+echo "hostapd exited ($status); starting on fallback $(grep '^channel=' "$fallback")" >&2
+exec /usr/sbin/hostapd "$fallback"

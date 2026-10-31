@@ -1,0 +1,12 @@
+# Save the time for chronyd -s every 15 minutes (chrony-save-time-tick.service)
+[Unit]
+Description=Save the time for chronyd -s periodically
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=15min
+# A oneshot that remains active needs restarting to run again
+Unit=chrony-save-time-tick.service
+
+[Install]
+WantedBy=timers.target

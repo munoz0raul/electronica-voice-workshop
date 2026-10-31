@@ -1,0 +1,3 @@
+# Demo check-in interval for aktualizr-lite (default 300 s)
+[uptane]
+polling_sec = @POLLING_SEC@

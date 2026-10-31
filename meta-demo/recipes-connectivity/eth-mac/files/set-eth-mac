@@ -1,0 +1,59 @@
+#!/bin/sh
+# Give the VENTUNO Q Ethernet interface a MAC address that survives reboots
+# and reflashes.
+#
+# The board has no factory Ethernet MAC: nothing fills in the device tree's
+# local-mac-address, and its "emac" partition is blank, so qcom-ethqos picks a
+# random address and systemd's MACAddressPolicy=persistent replaces it with
+# one derived from /etc/machine-id, which changes on every reflash. Use the
+# emac partition if it holds an address, otherwise derive a locally
+# administered address from the SoC serial number. Run by udev when the
+# interface appears, before NetworkManager brings it up.
+#
+# udev passes the interface index: by the time RUN executes, the interface has
+# been renamed (eth0 to end0), and udev's $name can still be the old name.
+ifindex="$1"
+part=/dev/disk/by-partlabel/emac
+serial=/sys/devices/soc0/serial_number
+
+[ -n "$ifindex" ] || exit 0
+iface=""
+for dev in /sys/class/net/*; do
+    if [ "$(cat "$dev/ifindex" 2>/dev/null)" = "$ifindex" ]; then
+        iface="${dev##*/}"
+        break
+    fi
+done
+[ -n "$iface" ] || exit 0
+
+valid() {
+    case "$1" in
+    ??:??:??:??:??:??) ;;
+    *) return 1 ;;
+    esac
+    case "$1" in
+    00:00:00:00:00:00 | ff:ff:ff:ff:ff:ff) return 1 ;;
+    esac
+    # Reject multicast addresses (least significant bit of the first octet set)
+    [ $((0x${1%%:*} & 1)) -eq 0 ]
+}
+
+mac=""
+if [ -r "$part" ]; then
+    mac=$(dd if="$part" bs=6 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n' |
+          sed -e 's/\(..\)/\1:/g' -e 's/:$//')
+fi
+
+if ! valid "$mac"; then
+    [ -r "$serial" ] || exit 0
+    id=$(cat "$serial")
+    [ -n "$id" ] || exit 0
+    hash=$(printf '%s:%s' "$id" "$iface" | sha256sum | cut -c1-12)
+    # Locally administered, unicast: set bit 1 and clear bit 0 of octet one
+    first=$(printf '%02x' $(( (0x${hash%??????????} & 0xfc) | 0x02 )))
+    mac=$(printf '%s%s' "$first" "${hash#??}" |
+          sed -e 's/\(..\)/\1:/g' -e 's/:$//')
+fi
+
+valid "$mac" || exit 0
+ip link set dev "$iface" address "$mac"

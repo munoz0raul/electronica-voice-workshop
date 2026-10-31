@@ -1,0 +1,25 @@
+#!/bin/sh
+# Give an UNO Q Wi-Fi interface its factory MAC address.
+#
+# The address is provisioned in the eMMC "wlanaddr" partition. Arduino's U-Boot
+# copies it into the device tree (local-mac-address); the edk2 firmware our
+# image boots with does not, so ath10k would pick a random MAC on every boot.
+# Run by udev when the interface appears, before NetworkManager brings it up.
+iface="$1"
+part=/dev/disk/by-partlabel/wlanaddr
+
+[ -n "$iface" ] && [ -r "$part" ] || exit 0
+
+mac=$(dd if="$part" bs=6 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n' |
+      sed -e 's/\(..\)/\1:/g' -e 's/:$//')
+case "$mac" in
+??:??:??:??:??:??) ;;
+*) exit 0 ;;
+esac
+case "$mac" in
+00:00:00:00:00:00 | ff:ff:ff:ff:ff:ff) exit 0 ;;
+esac
+# Reject multicast addresses (least significant bit of the first octet set)
+[ $((0x${mac%%:*} & 1)) -eq 0 ] || exit 0
+
+ip link set dev "$iface" address "$mac"

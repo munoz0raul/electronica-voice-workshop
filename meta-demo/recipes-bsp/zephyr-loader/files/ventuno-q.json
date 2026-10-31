@@ -1,0 +1,14 @@
+{
+  "gpio_controller_regex": "^[0-9a-f]+\\.pinctrl$",
+  "reset_gpio": 78,
+  "swclk_gpio": 71,
+  "swdio_gpio": 70,
+  "chip_name": "stm32h5",
+  "target_config": "stm32-m33-ram.cfg",
+  "target": "stm32h5.cpu",
+  "cpu_ap": 1,
+  "boot0_gpio": 47,
+  "flash_entry_vector": "0x08000004",
+  "ram": [{"base": "0x20000000", "size": "0x00040000"}],
+  "vector_base": "0x20000000"
+}

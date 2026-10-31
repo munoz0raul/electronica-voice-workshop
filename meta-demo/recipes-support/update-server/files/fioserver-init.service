@@ -1,0 +1,23 @@
+# First boot: create a development datadir (quick-start's devserver-init):
+# a self-signed PKI, TUF root metadata and a local admin/admin user. It runs
+# only while the datadir has no PKI, so it never replaces a provisioned or
+# restored one.
+[Unit]
+Description=Initialize the Foundries update-server datadir
+After=local-fs.target
+Before=fioserver.service
+ConditionPathExists=!@DATADIR@/certs/root.crt
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+UMask=0077
+ExecStart=/bin/mkdir -p @DATADIR@
+ExecStart=@BINDIR@/fioserver --datadir=@DATADIR@ devserver-init --dnsname @DNS_NAME@
+# Token-authenticated API requests per client IP per second (default 20). The
+# dashboard and sound-level-manager share VENTUNO Q's IP; exceeding it blocks
+# the IP for 30 s.
+ExecStart=/bin/sed -i -e 's/"AttemptsPerSecond": 0/"AttemptsPerSecond": @API_RATE_LIMIT@/' @DATADIR@/auth/auth-config.json
+
+[Install]
+WantedBy=multi-user.target

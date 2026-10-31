@@ -1,0 +1,29 @@
+services:
+  webapp-led-mcu-voice:
+    image: demo-server.local/webapp-led-mcu-voice:latest
+    restart: unless-stopped
+    # Host network: the web UI is reachable on the UNO Q's :8000.
+    network_mode: host
+    # privileged: insmod the side-loaded snd-usb-audio module and reach the
+    # MCU UART (/dev/ttyHS1) and the host LED sysfs nodes.
+    privileged: true
+    stdin_open: true
+    tty: true
+    group_add:
+      - "audio"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      # Shared with the assets app: it drops the current model here.
+      - /var/local/assets:/var/local/assets
+    environment:
+      # LED matrix over MCUmgr SMP to the Zephyr firmware on the STM32U5.
+      MCU_PORT: "/dev/ttyHS1"
+      # Edge Impulse inference tuning.
+      THRESH: "0.70"
+      DEBOUNCE_SECONDS: "0.5"
+      SELECT_COOLDOWN_SECONDS: "1.0"
+      SELECT_SUPPRESS_SECONDS: "8.0"
+      # USB mic ALSA card/device (the side-loaded card enumerates as 0).
+      PA_ALSA_PLUGHW: "0"
+      PA_ALSA_CARD: "0"
+      PA_ALSA_DEVICE: "0"

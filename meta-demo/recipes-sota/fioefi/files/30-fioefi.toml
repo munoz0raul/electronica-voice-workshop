@@ -1,0 +1,3 @@
+# Apply the image's UEFI firmware capsule with OS updates (fioefi)
+[bootloader]
+rollback_mode = "fioefi"

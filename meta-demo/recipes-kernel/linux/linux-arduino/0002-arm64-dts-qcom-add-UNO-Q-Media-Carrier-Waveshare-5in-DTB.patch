@@ -1,0 +1,31 @@
+From a0febd2b08a89539c365f46ea554564301d2aa01 Mon Sep 17 00:00:00 2001
+From: George <gcgrey@gmail.com>
+Date: Tue, 27 Oct 2026 20:33:25 +0000
+Subject: [PATCH] arm64: dts: qcom: add UNO Q + Media Carrier + Waveshare 5in
+ DTB
+
+Combine the imola base DTB with the Media Carrier and the Waveshare
+5-DSI-TOUCH-A panel overlays, which the tree already provides, into one
+DTB the bootloader can load directly.
+
+Upstream-Status: Inappropriate [OSS 2026 demo: board-specific DTB choice]
+---
+ arch/arm64/boot/dts/qcom/Makefile | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index 74d98f3..51dce5f 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -175,6 +175,8 @@ qrb2210-arduino-imola-carrier-media-full-4lanes-dtbs := qrb2210-arduino-imola-ba
+ dtb-$(CONFIG_ARCH_QCOM)	+= qrb2210-arduino-imola-carrier-media-full-4lanes.dtb
+ qrb2210-arduino-imola-carrier-media-full-2lanes-dtbs := qrb2210-arduino-imola-base.dtb qrb2210-arduino-imola-carrier-media.dtbo qrb2210-arduino-imola-carrier-media-camera-imx219-csi0-2lanes.dtbo qrb2210-arduino-imola-carrier-media-camera-imx219-csi1-2lanes.dtbo qrb2210-arduino-imola-carrier-media-panel-8in_touch_a-dsi.dtbo
+ dtb-$(CONFIG_ARCH_QCOM)	+= qrb2210-arduino-imola-carrier-media-full-2lanes.dtb
++qrb2210-arduino-imola-carrier-media-panel-5in-dtbs := qrb2210-arduino-imola-base.dtb qrb2210-arduino-imola-carrier-media.dtbo qrb2210-arduino-imola-carrier-media-panel-5in_touch_a-dsi.dtbo
++dtb-$(CONFIG_ARCH_QCOM)	+= qrb2210-arduino-imola-carrier-media-panel-5in.dtb
+ 
+ dtb-$(CONFIG_ARCH_QCOM)	+= qrb2210-rb1.dtb
+ 
+-- 
+2.54.0 (Apple Git-157)
+

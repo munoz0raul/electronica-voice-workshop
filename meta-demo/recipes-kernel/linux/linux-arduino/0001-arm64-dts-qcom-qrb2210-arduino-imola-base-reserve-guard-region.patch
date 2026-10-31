@@ -1,0 +1,32 @@
+From d10aafce11c8b6cd7f9798ef659f48f9ab0aea56 Mon Sep 17 00:00:00 2001
+From: Michael Scott <mike@foundries.io>
+Date: Mon, 26 Oct 2026 20:03:31 -0700
+Subject: [PATCH] arm64: dts: qcom: qrb2210-arduino-imola-base: reserve the
+ boot firmware's guard region
+
+On the QRB2210 boot binaries' UEFI (00021), any write to this region
+hard-hangs and resets the UNO Q. Reserving it lets the board run that
+UEFI instead of a separately built one, which can't be redistributed.
+
+Upstream-Status: Inappropriate [workaround for the UNO Q's boot firmware]
+Signed-off-by: Michael Scott <mike@foundries.io>
+---
+ arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
+index 590d8a6..1a4e15a 100644
+--- a/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
++++ b/arch/arm64/boot/dts/qcom/qrb2210-arduino-imola-base.dts
+@@ -689,3 +689,11 @@
+ &xo_board {
+ 	clock-frequency = <38400000>;
+ };
++
++&reserved_memory {
++	/* A write here hard-hangs and resets the board on its boot firmware */
++	m05-boundary-guard@7b8ff000 {
++		reg = <0x0 0x7b8ff000 0x0 0x1100000>;
++		no-map;
++	};
++};

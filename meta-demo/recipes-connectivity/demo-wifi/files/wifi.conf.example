@@ -1,0 +1,18 @@
+# Demo Wi-Fi network shared by the VENTUNO Q access point and the UNO Q
+# clients. build-os.sh creates wifi.conf from this with a random passphrase
+# when it is missing; wifi.conf is not committed.
+WIFI_SSID="oss2026-demo"
+# WPA2-PSK passphrase, 8-63 printable ASCII characters
+WIFI_PSK="change-me"
+# AP band: "bg" (2.4 GHz) or "a" (5 GHz).
+WIFI_BAND="a"
+# AP channel: a number to pin it, or "auto" to let hostapd pick the least
+# busy non-DFS channel of the band at startup (adds ~10 s to AP start).
+WIFI_CHANNEL="auto"
+# With "auto": channel to start on if automatic selection fails (default 36
+# for "a", 6 for "bg").
+#WIFI_ACS_FALLBACK="36"
+# Regulatory country for the AP (hostapd country_code); 5 GHz needs one.
+WIFI_COUNTRY="US"
+# Access point address/prefix; UNO Qs get DHCP leases from this subnet.
+WIFI_AP_ADDRESS="10.42.0.1/24"

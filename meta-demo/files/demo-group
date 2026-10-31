@@ -1,0 +1,6 @@
+# Static GIDs for the VENTUNO Q (ventuno-q.yml static-gids): the kiosk's
+# docker-compose.yml adds these numbers with group_add. video is 44 in
+# base-passwd already.
+#  groupname:password:gid:members
+wayland:x:985:
+render:x:993:

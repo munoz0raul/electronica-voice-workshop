@@ -1,0 +1,31 @@
+# The update-server: web UI and REST API on :8080, device gateway (mTLS) on
+# :8443. Both bind every interface, so no network-online wait is needed.
+#
+# fioserver-init.service creates the datadir on first boot when enabled;
+# otherwise provision it by hand (see docs/BUILDING-OS.md).
+[Unit]
+Description=Foundries update-server
+After=network.target fioserver-init.service
+ConditionPathExists=@DATADIR@/certs/root.crt
+ConditionPathExists=@DATADIR@/auth/hmac.secret
+
+[Service]
+Type=simple
+ExecStart=@BINDIR@/fioserver --datadir @DATADIR@ serve
+Restart=always
+RestartSec=5s
+
+# Hardening from upstream's contrib unit. ProtectSystem=strict leaves only
+# the datadir writable.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=@DATADIR@
+
+[Install]
+WantedBy=multi-user.target

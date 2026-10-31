@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""fioconfig remote action: print the device's health, as one JSON object:
+the uptime, each thermal zone's temperature and the Wi-Fi link (signal for
+a station, the connected stations for an access point).
+
+The dashboard's Health button triggers it (a fioconfig-oneshot-demo-health
+device config) and reads the output from the device's test results.
+"""
+import glob
+import json
+import re
+import subprocess
+
+
+def read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def thermal():
+    """{zone type: °C} for each thermal zone that reads."""
+    out = {}
+    for zone in sorted(glob.glob("/sys/class/thermal/thermal_zone*")):
+        temp = read(f"{zone}/temp")
+        if temp and temp.lstrip("-").isdigit():
+            name = read(f"{zone}/type") or zone.rsplit("/", 1)[-1]
+            out[name] = round(int(temp) / 1000, 1)
+    return out
+
+
+def iw(*args):
+    try:
+        return subprocess.run(["iw", *args], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def wifi():
+    """Each Wi-Fi interface: a station's network and signal, or an access
+    point's connected stations and their signals."""
+    out = []
+    for name, kind in re.findall(r"Interface (\S+)\n(?:\s+.*\n)*?\s+type (\S+)", iw("dev")):
+        link = {"interface": name, "mode": kind}
+        if kind == "managed":
+            text = iw("dev", name, "link")
+            ssid = re.search(r"SSID: (.*)", text)
+            signal = re.search(r"signal: (-?\d+) dBm", text)
+            rate = re.search(r"tx bitrate: (.*)", text)
+            link.update(connected=bool(ssid), ssid=ssid and ssid.group(1),
+                        signal_dbm=int(signal.group(1)) if signal else None,
+                        tx_bitrate=rate and rate.group(1).strip())
+        elif kind == "AP":
+            signals = [int(s) for s in re.findall(r"\n\s+signal:\s+(-?\d+)", iw("dev", name, "station", "dump"))]
+            link.update(stations=len(signals), weakest_dbm=min(signals) if signals else None)
+        out.append(link)
+    return out
+
+
+uptime = read("/proc/uptime")
+temps = thermal()
+print(json.dumps({
+    "uptime_s": round(float(uptime.split()[0])) if uptime else None,
+    "temperature_c": max(temps.values()) if temps else None,
+    "thermal": temps,
+    "wifi": wifi(),
+}))

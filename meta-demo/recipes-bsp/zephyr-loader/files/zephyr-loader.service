@@ -1,0 +1,13 @@
+[Unit]
+Description=Load Zephyr firmware into the STM32 MCU SRAM
+After=systemd-udev-trigger.service
+ConditionPathExists=@FIRMWAREDIR@/zephyr-@MACHINE@.elf
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=@LIBEXECDIR@/zephyr-loader --machine @MACHINE@ --firmware-dir @FIRMWAREDIR@ --config-dir @DATADIR@/zephyr-loader --scripts @DATADIR@/zephyr-tools/openocd/scripts
+TimeoutStartSec=75
+
+[Install]
+WantedBy=multi-user.target

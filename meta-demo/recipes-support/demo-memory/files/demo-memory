@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""fioconfig remote action: print the device's memory use, as one JSON object,
+for leak hunting over long runs.
+
+Per service cgroup it splits memory into anon (process heap: what a leak grows)
+and file (page cache, reclaimable), and per process it adds the RSS, threads
+and open files, which climb with leaked goroutines or connections. On the
+update-server host it also counts the connections on the device gateway and
+the size of what the server appends to.
+
+Trigger it with "fiocli devices triggers run <uuid> demo-memory" and read the
+output from the device's test results; tools/memwatch.sh samples a fleet.
+"""
+import glob
+import json
+import os
+import subprocess
+import time
+
+CGROUP = "/sys/fs/cgroup"
+SERVICES = ["aktualizr-lite", "fioconfig", "fioserver", "docker", "containerd"]
+# The update-server's state (meta-demo update-server UPDATE_SERVER_DATADIR)
+DATADIR = os.environ.get("DEMO_MEMORY_DATADIR", "@DATADIR@")
+GATEWAY_PORT = 8443
+MEMINFO = ["MemTotal", "MemAvailable", "MemFree", "Cached", "Buffers",
+           "AnonPages", "Shmem", "Slab", "SReclaimable", "SUnreclaim",
+           "KernelStack", "PageTables", "SwapTotal", "SwapFree"]
+MEMORY_STAT = ["anon", "file", "kernel", "kernel_stack", "sock", "shmem",
+               "file_mapped", "slab_unreclaimable"]
+STATUS = {"VmRSS": "rss_kb", "RssAnon": "rss_anon_kb", "Threads": "threads"}
+
+
+def read(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def number(text):
+    return int(text) if text and text.isdigit() else text
+
+
+def keyed(path):
+    """A "key value" file (memory.stat, cpu.stat, memory.events) as a dict"""
+    out = {}
+    for line in (read(path) or "").splitlines():
+        key, _, value = line.partition(" ")
+        out[key] = number(value.strip())
+    return out
+
+
+def meminfo():
+    out = {}
+    for line in (read("/proc/meminfo") or "").splitlines():
+        key, _, value = line.partition(":")
+        if key in MEMINFO:
+            out[key + "_kb"] = int(value.split()[0])
+    return out
+
+
+def process(pid):
+    out = {"pid": pid, "comm": read(f"/proc/{pid}/comm")}
+    for line in (read(f"/proc/{pid}/status") or "").splitlines():
+        key, _, value = line.partition(":")
+        if key in STATUS:
+            out[STATUS[key]] = int(value.split()[0])
+    try:
+        out["fds"] = len(os.listdir(f"/proc/{pid}/fd"))
+    except OSError:
+        pass
+    return out
+
+
+def cgroup(path):
+    """A cgroup's memory, CPU and processes"""
+    stat = keyed(f"{path}/memory.stat")
+    procs = (read(f"{path}/cgroup.procs") or "").split()
+    return {
+        "current": number(read(f"{path}/memory.current")),
+        "peak": number(read(f"{path}/memory.peak")),
+        **{k: stat.get(k) for k in MEMORY_STAT},
+        "oom_kill": keyed(f"{path}/memory.events").get("oom_kill"),
+        "cpu_usec": keyed(f"{path}/cpu.stat").get("usage_usec"),
+        "procs": [process(int(pid)) for pid in procs],
+    }
+
+
+def services():
+    out = {}
+    for name in SERVICES:
+        path = f"{CGROUP}/system.slice/{name}.service"
+        if os.path.isdir(path):
+            out[name] = cgroup(path)
+    return out
+
+
+def containers():
+    """Each Docker container's cgroup (the systemd cgroup driver's
+    docker-<id>.scope), by container name"""
+    names = {}
+    try:
+        ps = subprocess.run(["docker", "ps", "--no-trunc", "--format", "{{.ID}} {{.Names}}"],
+                            capture_output=True, text=True, timeout=20)
+        for line in ps.stdout.splitlines():
+            cid, _, name = line.partition(" ")
+            names[cid] = name
+    except (OSError, subprocess.SubprocessError):
+        pass
+    out = {}
+    for path in sorted(glob.glob(f"{CGROUP}/system.slice/docker-*.scope")):
+        cid = os.path.basename(path)[len("docker-"):-len(".scope")]
+        out[names.get(cid, cid[:12])] = cgroup(path)
+    return out
+
+
+def gateway_connections():
+    """Established TCP connections to the update-server's device gateway, per
+    remote address. The server sets no idle timeout, so connections a client
+    abandons stay open."""
+    peers = {}
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        for line in (read(table) or "").splitlines()[1:]:
+            fields = line.split()
+            local, remote, state = fields[1], fields[2], fields[3]
+            if state == "01" and int(local.split(":")[1], 16) == GATEWAY_PORT:
+                peer = remote.split(":")[0]
+                peers[peer] = peers.get(peer, 0) + 1
+    return {"total": sum(peers.values()), "peers": len(peers)}
+
+
+def tree(path):
+    """Bytes and files under path"""
+    size = files = 0
+    for root, _, names in os.walk(path):
+        for name in names:
+            try:
+                size += os.lstat(os.path.join(root, name)).st_size
+                files += 1
+            except OSError:
+                pass
+    return {"bytes": size, "files": files}
+
+
+def update_server():
+    """What the server appends to: the per-update rollout logs (never
+    rotated) and the per-device directories (events, reports, test results).
+    The OSTree and app stores are left out: they are large and change only
+    with uploads."""
+    if not os.path.isdir(DATADIR):
+        return None
+    logs = {}
+    for path in glob.glob(f"{DATADIR}/updates/*/logs/rollouts.log"):
+        logs[path.split("/")[-3]] = os.path.getsize(path)
+    fs = os.statvfs(DATADIR)
+    return {
+        "gateway_connections": gateway_connections(),
+        "rollout_logs": logs,
+        "devices": tree(f"{DATADIR}/devices"),
+        "free_bytes": fs.f_bavail * fs.f_frsize,
+    }
+
+
+def vmstat():
+    stat = {}
+    for line in (read("/proc/vmstat") or "").splitlines():
+        key, _, value = line.partition(" ")
+        if key in ("oom_kill", "pswpin", "pswpout"):
+            stat[key] = int(value)
+    return stat
+
+
+print(json.dumps({
+    "hostname": os.uname().nodename,
+    "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    "uptime_s": float((read("/proc/uptime") or "0").split()[0]),
+    "loadavg": (read("/proc/loadavg") or "").split()[:3],
+    "meminfo": meminfo(),
+    "vmstat": vmstat(),
+    "services": services(),
+    "containers": containers(),
+    "update_server": update_server(),
+    "journal": tree("/var/log/journal"),
+}))

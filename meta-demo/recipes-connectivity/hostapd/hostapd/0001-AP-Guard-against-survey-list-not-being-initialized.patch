@@ -1,0 +1,27 @@
+From: Benjamin Berg <benjamin.berg@intel.com>
+Subject: [PATCH] AP: Guard against survey list not being initialized
+
+Do not try to store survey information in the unusual event that the
+channel's survey_list is not initialized. This can happen if regulatory
+changes add new channels after the ACS scan has started.
+
+Upstream-Status: Backport [https://marc.info/?l=hostap&m=176371894322747&w=2]
+Signed-off-by: Benjamin Berg <benjamin.berg@intel.com>
+Reviewed-by: Andrei Otcheretianski <andrei.otcheretianski@intel.com>
+Signed-off-by: Michael Scott <mike@foundries.io>
+---
+ src/ap/drv_callbacks.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/ap/drv_callbacks.c b/src/ap/drv_callbacks.c
+--- a/src/ap/drv_callbacks.c
++++ b/src/ap/drv_callbacks.c
+@@ -2166,6 +2166,8 @@
+ 			continue;
+ 		if (chan->flag & HOSTAPD_CHAN_DISABLED)
+ 			continue;
++		if (!(chan->flag & HOSTAPD_CHAN_SURVEY_LIST_INITIALIZED))
++			continue;
+ 
+ 		dl_list_del(&survey->list);
+ 		dl_list_add_tail(&chan->survey_list, &survey->list);

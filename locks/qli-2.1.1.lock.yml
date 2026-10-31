@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+#
+# QLI 2.1.1: qli-2.1 plus the wrynose updates since, including two
+# linux-qcom-6.18 tag updates and a FastRPC fix in hexagon-dsp-binaries for
+# Monza (VENTUNO Q).
+
+header:
+  version: 14
+
+repos:
+  meta-qcom:
+    branch: wrynose
+    # qli-2.1.1
+    commit: b094cfccc192d8e02809bf87c6dd9c76bcf31330
+  meta-qcom-arduino:
+    branch: wrynose
+    commit: 4042ec57bbdf65459110d5045ca2772b0b614951
+  meta-foundries:
+    branch: wrynose
+    commit: 62d0067d3dc241ad761894afa8a79f6060348733
+
+local_conf_header:
+  qli-version: |
+    # qli-2.1.1 keeps meta-qcom-distro's DISTRO_VERSION at 2.1; name the
+    # release in os-release (VERSION, VERSION_ID, PRETTY_NAME). forcevariable:
+    # the distro config, read after local.conf, assigns it plainly
+    DISTRO_VERSION:forcevariable = "2.1.1"
+  qli-capsule: |
+    # The 2.1.1 update carries firmware capsule 1.3 (ESRT 65539), so the
+    # update to it flashes the firmware too (fioefi). Lowest supported stays
+    # at the machine's 0.0.1.1, so a reset to the 1.2 base can go back.
+    # forcevariable: wins over the machine kas file's CAPSULE_FW_VERSION
+    # whatever order kas writes local.conf in.
+    CAPSULE_FW_VERSION:forcevariable = "0.0.1.3"

@@ -1,0 +1,2 @@
+# Apply the factory Wi-Fi MAC from the eMMC wlanaddr partition (see set-wlan-mac)
+ACTION=="add", SUBSYSTEM=="net", DRIVERS=="ath10k_snoc", RUN+="/usr/libexec/demo-wifi/set-wlan-mac $name"

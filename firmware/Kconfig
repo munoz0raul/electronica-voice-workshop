@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+mainmenu "Demo firmware"
+
+config DEMO_BAR_PERIOD_MS
+	int "LED matrix self-test frame period (ms)"
+	default 1000
+	range 10 10000
+	help
+	  How often the self-test's vertical bar moves to the next column.
+
+source "Kconfig.zephyr"

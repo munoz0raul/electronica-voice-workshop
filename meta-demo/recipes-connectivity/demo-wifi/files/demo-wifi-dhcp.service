@@ -1,0 +1,20 @@
+[Unit]
+Description=Demo Wi-Fi DHCP and DNS server
+BindsTo=demo-wifi-ap.service
+After=demo-wifi-ap.service
+
+[Service]
+StateDirectory=demo-wifi
+# DNS for the offline demo network on @AP_IP@ only (the system dnsmasq.service
+# keeps the other interfaces, see /etc/dnsmasq.d/demo-wifi): it answers
+# @SERVER_NAME@ and fails every other name at once, so clients and containers
+# don't wait on unreachable public servers.
+ExecStart=/usr/bin/dnsmasq --keep-in-foreground --conf-file=/dev/null \
+    --interface=@IFACE@ --bind-interfaces --except-interface=lo \
+    --no-resolv --no-hosts --address=/#/ --address=/@SERVER_NAME@/@AP_IP@ \
+    --dhcp-range=@DHCP_RANGE@ --dhcp-authoritative \
+    --dhcp-leasefile=/var/lib/demo-wifi/dhcp.leases
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

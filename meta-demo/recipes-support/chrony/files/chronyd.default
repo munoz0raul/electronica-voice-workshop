@@ -1,0 +1,3 @@
+# -s: at startup, set the clock from the driftfile's modification time when
+# that is later (no battery-backed RTC), instead of starting in 1970.
+OPTIONS="-s"

@@ -1,0 +1,19 @@
+# Set the clock from internet NTP once, before chronyd starts serving the
+# demo network. There's no battery-backed RTC, so this is what gets the
+# fleet's clock right for TLS. It only runs at boot: an uplink coming or going
+# mid-demo never moves the clock the lighting clients follow. Without an
+# uplink, the clock keeps chronyd -s's restored time.
+[Unit]
+Description=Set the clock from internet NTP at boot
+Wants=network-online.target
+After=network-online.target
+Before=chronyd.service
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/sbin/chronyd -q -t 15 "pidfile /run/chrony-boot-sync.pid" \
+    "pool pool.ntp.org iburst"
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

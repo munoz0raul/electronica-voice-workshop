@@ -69,7 +69,8 @@ if [ -n "${last}" ] && git diff --quiet "${last}" "${new}" -- "${WATCH_PATH}"; t
     exit 0
 fi
 
-log "building for ${new:0:7} (was ${last:0:7:-none})"
+last_short=${last:0:7}
+log "building for ${new:0:7} (was ${last_short:-none})"
 git checkout -q "${new}"
 
 # --- which apps changed ------------------------------------------------------

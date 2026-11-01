@@ -44,8 +44,9 @@ locally:
 2. You build apps, stage a **Target** — an `ostree_repo` (the OS) plus staged
    compose apps — and `fiocli updates upload main <name> <dir>` it. Each upload
    is one Target, tagged `main`, versioned higher than the last.
-3. `fiocli updates create-rollout` points a Target at a device **group**. At its
-   next check-in, a device whose tag matches pulls the Target.
+3. `fiocli updates create-rollout` points a Target at a device **group**, and
+   enrolls the devices that are in that group at the moment it is created. At its
+   next check-in, an enrolled device whose tag matches pulls the Target.
 4. A Target that changes only apps (same `ostree_repo`) is an **app-only**
    update: fast, no reboot. A changed OS hash is an OS update and reboots.
 
@@ -95,10 +96,12 @@ drives two things on a recognised colour:
 Two start-time workarounds live in its `start.sh` (documented in
 `apps/webapp-led-mcu-voice/README.md`):
 
-- **USB audio.** The demo image lacks `snd-usb-audio`, so `start.sh` `insmod`s a
-  bundled `.ko` that must match the running kernel. The clean fix is to bake
-  `kernel-module-snd-usb-audio` into the image —
-  [Building the OS](BUILDING-OS.md#usb-audio).
+- **USB audio.** The demo image ships `snd-usb-audio` (baked in as
+  `kernel-module-snd-usb-audio` — [Building the OS](BUILDING-OS.md#usb-audio)),
+  so a USB mic appears as an ALSA card on hotplug. The app captures through the
+  ALSA `default` PCM (`PA_ALSA_DEVICE=3`). As a fallback for an image built
+  without the module, `start.sh` side-loads a bundled `.ko` when no ALSA card is
+  present.
 - **MCU port.** `MCU_PORT` defaults to `/dev/ttyHS1`.
 
 The model comes from `webapp-led-mcu-voice-assets`, which carries a baked-in

@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     # Host network: the web UI is reachable on the UNO Q's :8000.
     network_mode: host
-    # privileged: insmod the side-loaded snd-usb-audio module and reach the
+    # privileged: insmod the fallback side-load of snd-usb-audio and reach the
     # MCU UART (/dev/ttyHS1) and the host LED sysfs nodes.
     privileged: true
     stdin_open: true

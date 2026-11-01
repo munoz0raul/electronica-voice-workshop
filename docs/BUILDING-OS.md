@@ -119,32 +119,25 @@ The `ventuno-q` machine config still installs the Hexagon DSP QAIRT libraries
 ## USB audio
 
 The voice app records from a USB microphone, which needs the `snd-usb-audio`
-kernel module. The UNO Q image as built **does not ship it**, so the app loads
-it at container start: `apps/webapp-led-mcu-voice/start.sh` `insmod`s a bundled
-`.ko` (and its dependencies) from `apps/webapp-led-mcu-voice/modules/`.
-
-That workaround is fragile — the bundled `.ko` is built for one kernel version
-(`7.0.14-gf2e5cd16ede5-dirty`) and `insmod` refuses to load it into any other.
-**Rebuild the OS and the module will no longer match**, and audio breaks until
-you rebuild the `.ko` against the new kernel.
-
-**The proper fix (not yet applied):** bake the module into the image so no
-side-loading is needed. In Yocto a loadable kernel module is packaged as
-`kernel-module-<name>`, so add to the UNO Q image's `IMAGE_INSTALL`:
+kernel module. The UNO Q image bakes it in so udev autoloads it on mic hotplug
+and an ALSA card appears. In Yocto a loadable kernel module is packaged as
+`kernel-module-<name>`; the UNO Q image's `IMAGE_INSTALL` (in `uno-q.yml`) adds:
 
 ```
-IMAGE_INSTALL:append = " kernel-module-snd-usb-audio"
+IMAGE_INSTALL:append:uno-q = " kernel-module-snd-usb-audio"
 ```
 
-This requires the kernel to build the module (`CONFIG_SND_USB_AUDIO=m`); if the
-config has it off or built-in, adjust the kernel config fragment first.
+Its `snd-usbmidi-lib`/`snd-hwdep`/`snd-rawmidi` dependencies come along as
+module RDEPENDS. This relies on the kernel building the module
+(`CONFIG_SND_USB_AUDIO=m`); if the config has it off or built-in, adjust the
+kernel config fragment first.
 
-> **Inferred, untested.** The `kernel-module-snd-usb-audio` package name is the
-> standard Yocto convention for the `snd-usb-audio` module, and the `=m` config
-> is what makes it a loadable package — but this has not been built or flashed
-> here. The module is currently delivered by the app, not the image. Once baked
-> in and verified, drop the `load_snd_usb_audio` step from the app's `start.sh`
-> and the `apps/webapp-led-mcu-voice/modules/` directory.
+Built and flashed here, the app finds the image's ALSA card on start. As a
+fallback for an image built without the module, `apps/webapp-led-mcu-voice/start.sh`
+side-loads a bundled `.ko` (and its dependencies) from
+`apps/webapp-led-mcu-voice/modules/` when no ALSA card is present; that bundled
+`.ko` is version-locked to one kernel (`7.0.14-gf2e5cd16ede5-dirty`), so keep it
+in step with the image kernel if you rely on the fallback.
 
 ## Demo Wi-Fi network
 

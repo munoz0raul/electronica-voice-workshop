@@ -18,18 +18,26 @@ draws on the 8x13 LED matrix. A small web UI on `:8000` mirrors the state.
   (dropped there by the assets app) and falls back to the model baked into
   this image. See [`../webapp-led-mcu-voice-assets`](../webapp-led-mcu-voice-assets).
 
-## Two things done at start, not in the OS image
+## Audio capture device
 
-The boards reused for the workshop were flashed with an OS image that does not
-ship the USB-audio kernel module, and the container does not see the host's
-`/dev/mcu-console` symlink. `start.sh` works around both:
+The app captures through the ALSA `default` PCM, chosen by `PA_ALSA_DEVICE` in
+`docker-compose.yml` (`3`). That device resamples to the model's 16 kHz mono;
+the raw `hw:0,0` device (index `0`) is fixed at 44100 Hz and rejects a 16 kHz
+open, so the runner gets no frames there.
 
-1. **snd-usb-audio** — `insmod`'d from `modules/` in dependency order if no
-   ALSA card is present. The `.ko` files are **version-locked to the kernel the
-   boards were flashed with** (`7.0.14-gf2e5cd16ede5-dirty`). If you rebuild the
-   OS with a different kernel, these stop loading (vermagic mismatch) and must
-   be replaced, or — the proper fix — add `kernel-module-snd-usb-audio` to the
-   OS image (see [`docs/BUILDING-OS.md`](../../docs/BUILDING-OS.md)).
+## Two things done at start
+
+The USB mic needs the `snd-usb-audio` kernel module, and the container does not
+see the host's `/dev/mcu-console` symlink. `start.sh` handles both:
+
+1. **snd-usb-audio** — the OS image bakes the module in
+   (`kernel-module-snd-usb-audio`, see
+   [`docs/BUILDING-OS.md`](../../docs/BUILDING-OS.md)), so the ALSA card is
+   present at start. As a fallback for an image built without it, `start.sh`
+   `insmod`s a bundled `.ko` from `modules/` in dependency order when no ALSA
+   card is found. Those `.ko` files are version-locked to one kernel
+   (`7.0.14-gf2e5cd16ede5-dirty`), so keep them in step with the image kernel if
+   you rely on the fallback.
 2. **MCU_PORT** — set to `/dev/ttyHS1` and a `/dev/mcu-console` symlink created
    inside the container.
 
@@ -45,5 +53,6 @@ From the repo root:
 
 Verified live on the UNO Q (voice -> matrix + RGB LEDs, web UI on :8000). The
 on-device fixes this app makes permanent — MCUmgr matrix path, LED sysfs names,
-snd-usb-audio side-load, `MCU_PORT` — were debugged on the device; the image
-build itself has not been rebuilt-and-flashed through the OTA path yet.
+`PA_ALSA_DEVICE=3` capture device, `MCU_PORT` — are in the repo. The OS image is
+rebuilt with `snd-usb-audio` baked in, flashed, and verified end-to-end through
+the OTA path; the app's `start.sh` side-load is now a fallback.

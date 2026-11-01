@@ -10,6 +10,7 @@ SRC_URI = " \
     git://github.com/foundriesio/update-server;protocol=https;branch=main;destsuffix=${GO_SRCURI_DESTSUFFIX} \
     file://fioserver.service \
     file://fioserver-init.service \
+    file://branding.json \
 "
 SRCREV = "0af7868c4356234e953bec004e3078cc12ca4a5a"
 PV = "1.0~rc3+git"
@@ -50,6 +51,13 @@ SYSTEMD_AUTO_ENABLE = "enable"
 # Installs only the server binary, renamed fioserver as in upstream's Makefile
 do_install() {
     install -D -m 0755 ${B}/${GO_BUILD_BINDIR}/server ${D}${bindir}/fioserver
+
+    # Web UI branding: fioserver reads <datadir>/branding/branding.json and
+    # overrides its defaults (here just the title, "Update Server" instead of
+    # the built-in "Foundries Update Server"). fioserver-init copies it into a
+    # fresh datadir on first boot.
+    install -D -m 0644 ${UNPACKDIR}/branding.json ${D}${datadir}/fioserver/branding.json
+
     install -d ${D}${systemd_system_unitdir}
     units="fioserver.service"
     if [ "${UPDATE_SERVER_AUTO_INIT}" = "1" ]; then
@@ -60,6 +68,9 @@ do_install() {
             -e 's|@DATADIR@|${UPDATE_SERVER_DATADIR}|g' \
             -e 's|@DNS_NAME@|${UPDATE_SERVER_DNS_NAME}|g' \
             -e 's|@API_RATE_LIMIT@|${UPDATE_SERVER_API_RATE_LIMIT}|g' \
+            -e 's|@BRANDING_SRC@|${datadir}/fioserver/branding.json|g' \
             ${UNPACKDIR}/$unit > ${D}${systemd_system_unitdir}/$unit
     done
 }
+
+FILES:${PN} += "${datadir}/fioserver/branding.json"

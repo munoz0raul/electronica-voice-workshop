@@ -18,6 +18,10 @@ ExecStart=@BINDIR@/fioserver --datadir=@DATADIR@ devserver-init --dnsname @DNS_N
 # dashboard and sound-level-manager share VENTUNO Q's IP; exceeding it blocks
 # the IP for 30 s.
 ExecStart=/bin/sed -i -e 's/"AttemptsPerSecond": 0/"AttemptsPerSecond": @API_RATE_LIMIT@/' @DATADIR@/auth/auth-config.json
+# Name the web UI "Update Server" (the image ships branding.json; fioserver
+# reads it from <datadir>/branding/).
+ExecStart=/bin/mkdir -p @DATADIR@/branding
+ExecStart=/bin/cp @BRANDING_SRC@ @DATADIR@/branding/branding.json
 
 [Install]
 WantedBy=multi-user.target

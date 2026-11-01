@@ -89,11 +89,11 @@ fiocli devices list --columns uuid,name,group,tag
 ## 5. Put the UNO Q in a group
 
 Rollouts target groups. The UNO Q is the only device that receives updates, so
-put it in a group (the name is yours; this matches the docs):
-
-```sh
-fiocli devices update <uno-q-uuid> --group demo
-```
+put it in a group. The group is a reserved device **label** named `group`; set
+it in the update-server web UI at `http://<ventuno-q-ip>:8080` (login
+`admin`/`admin`): open **Devices**, pick the UNO Q, open its labels editor
+(**Manage**), add a label `group` with value `demo`, and Save. The name is
+yours; `demo` matches the rest of these docs.
 
 The VENTUNO Q is the server and receives no app rollout, so it needs no group;
 it stays registered and visible in the fleet.
@@ -118,8 +118,14 @@ fiocli updates upload main uno-q-voice-0 ./targets/uno-q/
 ## 7. Roll out
 
 ```sh
-fiocli updates create-rollout uno-q-voice-0 setup-uno setup-uno --groups demo
+fiocli updates create-rollout uno-q-voice-0 setup-uno --groups demo
 ```
+
+The two positional arguments are the uploaded Target (`uno-q-voice-0`) and a
+name for this rollout (`setup-uno`).
+
+> A rollout enrolls the devices that are in the group when it is created, so the
+> UNO Q must already be in `demo` from step 5 before you run this.
 
 The UNO Q's aktualizr-lite picks up the rollout at its next check (polling is
 every 5 s in the demo image), pulls the apps and starts them.

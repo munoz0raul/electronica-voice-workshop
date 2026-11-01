@@ -5,6 +5,10 @@ update-server managing container apps on an Arduino UNO Q.
 
 ## Running the workshop
 
+- [Reproduce from flashing](REPRODUCE.md): the short end-to-end path — the three
+  flash/ostree artifacts you must stash, flashing both boards, provisioning the
+  self-building `poll-and-build` loop, and shipping an app update. Browser-only
+  on your laptop.
 - [Setup](SETUP.md): from flashed boards to a running app. Prerequisites,
   register the boards with the update-server, stage and upload the first
   Target, and roll it out.

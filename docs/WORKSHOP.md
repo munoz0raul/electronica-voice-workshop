@@ -80,7 +80,12 @@ pull).
   the UNO Q's version ticks up to the new Target.
 - **The board**: the assets app writes the new `deployment.eim` and restarts
   the voice app, which reloads the model. Say "select" then a colour and
-  confirm the retrained model reacts.
+  confirm the retrained model reacts. To open the UNO Q's `:8000` UI from your
+  laptop, tunnel it through the VENTUNO Q and browse to `http://localhost:8000`:
+
+  ```sh
+  ssh -L 8000:<uno-q-ip>:8000 -J root@<ventuno-q-ip> root@<uno-q-ip>
+  ```
 
 To follow it on the device:
 

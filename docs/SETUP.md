@@ -132,8 +132,15 @@ every 5 s in the demo image), pulls the apps and starts them.
 
 **Check:**
 
-- The voice app's UI loads at `http://<uno-q-ip>:8000`; say "select" then a
-  colour and the matrix + RGB LEDs react.
+- The voice app's UI loads on the UNO Q's `:8000`; say "select" then a colour
+  and the matrix + RGB LEDs react. The UNO Q is on the VENTUNO Q's internal
+  network, so from your laptop tunnel it through the VENTUNO Q and open
+  `http://localhost:8000`:
+
+  ```sh
+  ssh -L 8000:<uno-q-ip>:8000 -J root@<ventuno-q-ip> root@<uno-q-ip>
+  ```
+
 - The update-server's web UI at `http://<ventuno-q-ip>:8080/devices` (login
   `admin`/`admin`) lists the UNO Q with its current Target and version.
 

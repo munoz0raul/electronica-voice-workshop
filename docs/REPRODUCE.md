@@ -13,20 +13,28 @@ rebuild the OS images see [BUILDING-OS.md](BUILDING-OS.md).
 ## Artifacts you must have
 
 The repo is public, so the source (both apps, `tools/`, `meta-demo/`) comes from
-a `git clone`. Three things are **large binaries kept out of git** — stash them
-somewhere your reproducer can download (a GitHub release, a share, a bucket).
-Paths below are where they live on the build Mac.
+a `git clone`. Three things are **large binaries kept out of git**; they are
+published as release assets under
+[`images-2026-11-01`](https://github.com/munoz0raul/electronica-voice-workshop/releases/tag/images-2026-11-01).
 
-| Artifact | What it is | File | Size |
+| Artifact | What it is | Download | Size |
 | --- | --- | --- | --- |
-| UNO Q flash image | The OS flashed on the UNO Q (QRB2210 eMMC), with `snd-usb-audio` baked in | `~/qualcomm-flash/uno-q-flash-image.tar.gz` | 428M |
-| VENTUNO Q flash image | The OS flashed on the VENTUNO Q (eMMC + SAIL SPI-NOR), update-server + demo Wi-Fi | `~/qualcomm-flash/ventuno-q/ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz` | 851M |
-| UNO Q `ostree_repo` | The UNO Q OS half, commit `b637abb7`. `poll-and-build` copies it into every Target so updates are **app-only** (no reboot). Must match the flashed UNO Q OS exactly | `~/qualcomm-flash/uno-q-ostree_repo-b637abb7.tgz` | 291M |
+| UNO Q flash image | The OS flashed on the UNO Q (QRB2210 eMMC), with `snd-usb-audio` baked in | [`uno-q-flash-image.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-flash-image.tar.gz) | 428M |
+| VENTUNO Q flash image | The OS flashed on the VENTUNO Q (eMMC + SAIL SPI-NOR), update-server + demo Wi-Fi | [`ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz) | 851M |
+| UNO Q `ostree_repo` | The UNO Q OS half, commit `b637abb7`. `poll-and-build` copies it into every Target so updates are **app-only** (no reboot). Must match the flashed UNO Q OS exactly | [`uno-q-ostree_repo-b637abb7.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-ostree_repo-b637abb7.tgz) | 291M |
 
-> Pack tarballs on macOS with `COPYFILE_DISABLE=1 tar --no-mac-metadata -czf …`.
-> A plain `tar czf` adds AppleDouble `._*` sidecars; a stray `refs/heads/._uno-q`
-> makes the server reject the upload (`ref "._uno-q" does not contain a valid
-> object hash`). The three files above were packed clean.
+After downloading, verify against the release's
+[`SHA256SUMS`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/SHA256SUMS):
+
+```sh
+shasum -a 256 -c SHA256SUMS
+```
+
+> If you ever re-pack these on macOS, use
+> `COPYFILE_DISABLE=1 tar --no-mac-metadata -czf …`. A plain `tar czf` adds
+> AppleDouble `._*` sidecars; a stray `refs/heads/._uno-q` makes the server
+> reject the upload (`ref "._uno-q" does not contain a valid object hash`). The
+> published files are packed clean.
 
 The `ostree_repo` must be the **exact** OS on the UNO Q. If you rebuild the UNO Q
 image, re-export its `ostree_repo` from the build and re-stash it, or the first

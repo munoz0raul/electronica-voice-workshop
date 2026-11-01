@@ -22,7 +22,15 @@ services:
       DEBOUNCE_SECONDS: "0.5"
       SELECT_COOLDOWN_SECONDS: "1.0"
       SELECT_SUPPRESS_SECONDS: "8.0"
-      # USB mic ALSA card/device (the side-loaded card enumerates as 0).
+      # USB mic, as pyaudio (PortAudio/ALSA) enumerates it. PA_ALSA_DEVICE is
+      # the only one the app reads -- it is passed straight to pyaudio as
+      # input_device_index. Index 0 is the raw hw:0,0 device, which the C-Media
+      # mic fixes at 44100 Hz and which rejects the model's 16 kHz open with
+      # "Invalid sample rate" (-9997), so the Edge Impulse runner never gets a
+      # frame and the audio watchdog restarts it every ~20 s. Index 3 is the
+      # ALSA "default" PCM, which resamples to 16 kHz mono and routes to the
+      # USB card. PA_ALSA_PLUGHW/CARD are inert (the app's pyaudio path ignores
+      # them) and kept only for reference.
       PA_ALSA_PLUGHW: "0"
       PA_ALSA_CARD: "0"
-      PA_ALSA_DEVICE: "0"
+      PA_ALSA_DEVICE: "3"

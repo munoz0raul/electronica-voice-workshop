@@ -85,6 +85,16 @@ local_conf_header:
     # the whole ADSP down in a crash/recover loop.
     SYSTEMD_AUTO_ENABLE:pn-qcom-sensors-binaries = "disable"
 
+  uno-q-usb-audio: |
+    # The USB mic needs snd-usb-audio, which the kernel builds as a module
+    # (CONFIG_SND_USB_AUDIO=m) but core-image-full-cmdline doesn't install.
+    # Bake it (its snd-usbmidi-lib/snd-hwdep/snd-rawmidi deps come along as
+    # module RDEPENDS) into the image so udev autoloads it on mic hotplug and
+    # an ALSA card appears. The voice app's start.sh then finds that card
+    # instead of side-loading its own bundled copy, so audio no longer breaks
+    # when the image kernel and the app's prebuilt modules drift apart.
+    IMAGE_INSTALL:append:uno-q = " kernel-module-snd-usb-audio"
+
   capsule-board: |
     # FMP ESRT GUID read from the Uno Q board:
     # /sys/firmware/efi/esrt/entries/entry0/fw_class

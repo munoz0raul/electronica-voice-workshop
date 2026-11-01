@@ -41,6 +41,13 @@ shipped in the image:
    (`/var/lib/poll-and-build/uno-q-ostree_repo` by default). `stage-target.sh`
    copies it into every Target so the board sees an app-only update (no reboot).
    It must match the OS flashed on the UNO Q.
+   If you transfer it from a Mac as a tarball, build the tarball **without**
+   macOS AppleDouble sidecars — `COPYFILE_DISABLE=1 tar --no-mac-metadata -czf
+   …`. A plain `tar czf` on macOS adds `._*` files throughout the repo, and the
+   stray `refs/heads/._uno-q` makes the upload fail server-side with
+   `unable to probe ostree repo: ref "._uno-q" does not contain a valid object
+   hash`. If you already extracted a dirty copy, clean it with
+   `find "$OSTREE_REPO" -name '._*' -exec rm -f {} +`.
 4. **First voice-app image.** The Target stages both apps, so
    `images/webapp-led-mcu-voice.oci.tar` must exist even when only the assets
    (model) app changed. It builds on first run (egress + disk are ample on the

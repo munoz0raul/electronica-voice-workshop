@@ -63,10 +63,12 @@ tag `main`, a higher version.
 ## 5. Roll it out
 
 ```sh
-fiocli updates create-rollout uno-q-voice-1 retrain-1 retrain-1 --groups demo
+fiocli updates create-rollout uno-q-voice-1 retrain-1 --groups demo
 ```
 
-To send it to one board instead of the whole group, use `--uuids <uno-q-uuid>`.
+The two positional arguments are the uploaded Target (`uno-q-voice-1`) and a
+name for this rollout (`retrain-1`). To send it to one board instead of the
+whole group, use `--uuids <uno-q-uuid>`.
 
 **Check:** `fiocli devices list --columns name,group,target` — the UNO Q's
 target moves to `uno-q-voice-1` within a check interval (~5 s poll, then the
@@ -97,10 +99,12 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
   file (`md5sum apps/webapp-led-mcu-voice-assets/deployment.eim`).
 - **Voice app won't recognise words.** Wrong labels or an x86 EIM — redo the
   export (step 1). The app logs the model path and labels at startup.
-- **No audio at all.** The USB-audio workaround in the voice app's `start.sh`
-  (`apps/webapp-led-mcu-voice/README.md`) depends on the bundled kernel module
-  matching the running kernel. If the OS was rebuilt, rebuild the module to
-  match — see [Building the OS](BUILDING-OS.md#usb-audio).
+- **No audio at all.** The demo image bakes in `snd-usb-audio`, so a USB mic
+  appears as an ALSA card on hotplug. Confirm the card is present
+  (`ssh -J root@<ventuno-q-ip> root@<uno-q-ip> arecord -l`). The voice app
+  captures through the ALSA `default` PCM, selected by `PA_ALSA_DEVICE` in
+  `apps/webapp-led-mcu-voice/docker-compose.yml` (`3`, the resampling `default`
+  device — the raw `hw:0,0` is fixed at 44100 Hz and the model needs 16 kHz).
 
 ## Reset between runs
 

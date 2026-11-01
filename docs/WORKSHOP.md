@@ -74,8 +74,8 @@ pull).
 
 ## 6. Watch it land
 
-- **Status page** (`http://<ventuno-q-ip>:8081`): the UNO Q's version ticks up
-  to the new Target.
+- **Devices view** (`http://<ventuno-q-ip>:8080/devices`, login `admin`/`admin`):
+  the UNO Q's version ticks up to the new Target.
 - **The board**: the assets app writes the new `deployment.eim` and restarts
   the voice app, which reloads the model. Say "select" then a colour and
   confirm the retrained model reacts.

@@ -310,7 +310,7 @@ boot, `lmp-auto-hostname` (from meta-lmp) renames the board
 adds a `127.0.1.1` entry to `/etc/hosts`, and then disables itself.
 
 Register each board with the update-server under its hostname; it is the name
-the status page lists the device by.
+the update-server lists the device by in its `:8080/devices` view.
 
 ## OS, kernel and firmware report
 
@@ -583,7 +583,7 @@ missing, so it never replaces an existing datadir.
 | `UPDATE_SERVER_AUTO_INIT` | `1` | `0` leaves out the init service; provision the datadir by hand or restore a backup |
 | `UPDATE_SERVER_DNS_NAME` | `demo-server.local` | The gateway's TLS name |
 | `UPDATE_SERVER_DATADIR` | `/var/local/datadir` | Server state |
-| `UPDATE_SERVER_API_RATE_LIMIT` | `100` | Token-authenticated API requests per second per client IP, set in a new datadir's `auth/auth-config.json` (the server's default is 20). An IP that exceeds it is blocked for 30 s; the status page polls from VENTUNO Q's IP. On an existing datadir, edit `RateLimits.AttemptsPerSecond` there and restart `fioserver` |
+| `UPDATE_SERVER_API_RATE_LIMIT` | `100` | Token-authenticated API requests per second per client IP, set in a new datadir's `auth/auth-config.json` (the server's default is 20). An IP that exceeds it is blocked for 30 s. On an existing datadir, edit `RateLimits.AttemptsPerSecond` there and restart `fioserver` |
 
 `/var` survives OS updates but not a reflash, and a reflashed VENTUNO Q
 initializes a new datadir whose keys don't match the enrolled devices. Keep a

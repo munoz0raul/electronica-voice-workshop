@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # arm64 apps; each builds from its own directory under apps/.
-APPS=(webapp-led-mcu-voice webapp-led-mcu-voice-assets status-page)
+APPS=(webapp-led-mcu-voice webapp-led-mcu-voice-assets)
 
 rebuild=0
 want=()

@@ -1,7 +1,7 @@
 # Architecture
 
 One **VENTUNO Q** is the server: it runs the Foundries update-server (the
-FoundriesFactory replacement), the demo Wi-Fi access point, and a status page.
+FoundriesFactory replacement) and the demo Wi-Fi access point.
 One **UNO Q** is the end device: it runs the voice→LED/matrix app and the
 assets app that carries its model. Both run a Qualcomm Linux (QLI) OSTree image
 with the Foundries OTA client built in; the UNO Q's LED matrix is driven by
@@ -15,12 +15,11 @@ Zephyr firmware on its on-board STM32U5.
 │  update-server (systemd)          │◀─ check-in ─▶│  aktualizr-lite ── pulls Targets     │
 │    :8080 web UI + REST /v1        │    every 5s  │  fioconfig   ──── applies config     │
 │    :8443 device gateway (mTLS)    │              │                                      │
-│                                   │   OTA apps   │  webapp-led-mcu-voice  (:8000)       │
-│  status-page (compose, :8081)     │─── + config ▶│    └─ mic → Edge Impulse → LEDs      │
-│    reads /v1, shows each device's │              │    └─ /dev/ttyHS1 → Zephyr matrix    │
-│    current Target + version       │              │  webapp-led-mcu-voice-assets         │
-│                                   │              │    └─ drops model in /var/local/     │
-│  demo-wifi AP · chrony · mDNS     │              │                                      │
+│    /devices lists each device's   │   OTA apps   │  webapp-led-mcu-voice  (:8000)       │
+│    current Target + version       │─── + config ▶│    └─ mic → Edge Impulse → LEDs      │
+│                                   │              │    └─ /dev/ttyHS1 → Zephyr matrix    │
+│                                   │              │  webapp-led-mcu-voice-assets         │
+│  demo-wifi AP · chrony · mDNS     │              │    └─ drops model in /var/local/     │
 └──────────────────────────────────┘              └────────────────────────────────────┘
 ```
 
@@ -28,11 +27,11 @@ Zephyr firmware on its on-board STM32U5.
 
 | Device | Compose apps | Host services (from the image) |
 | --- | --- | --- |
-| VENTUNO Q | `status-page` | update-server, demo-wifi AP, chrony server, mDNS |
+| VENTUNO Q | none | update-server, demo-wifi AP, chrony server, mDNS |
 | UNO Q | `webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets` | demo-wifi auto-join, chrony client, `zephyr-loader` |
 
 Each app is a Docker Compose application delivered in a Target and run by
-aktualizr-lite. The three apps are built by `build-apps.sh` and staged into
+aktualizr-lite. The two UNO Q apps are built by `build-apps.sh` and staged into
 Targets by `tools/stage-target.sh`; see [SETUP.md](SETUP.md).
 
 ## The OTA flow
@@ -75,21 +74,12 @@ PKI and invalidates every enrolled device. To keep an enrolled fleet across a
 reflash, back up the datadir and restore it — see
 [Building the OS](BUILDING-OS.md#update-server).
 
-## The status page
+## Watching the fleet
 
-`status-page` is the only app on the VENTUNO Q. It reads the update-server REST
-API and shows each device's current Target and version, auto-refreshing. It is
-read-only and deliberately minimal — it replaces the upstream dashboard, which
-also drove the wall, camera and sound demos that this fork removed.
-
-It needs a Bearer token for `/v1` (env `STATUS_TOKEN`, or `/run/secrets/`); the
-token mechanism is the one unverified piece of this fork — see
-[the status-page token](SETUP.md#status-page-token). The API it uses:
-
-| Call | Used for |
-| --- | --- |
-| `GET /v1/devices`, `GET /v1/devices/<uuid>` | the device list, each device's current target and `last-seen` |
-| `GET /v1/updates`, `GET /v1/updates/<name>/tuf` | each Target's version, from `targets.json.signed.targets[name].custom.version` |
+The update-server serves its own web UI. Open `http://<ventuno-q-ip>:8080/devices`
+(sign in with the `admin`/`admin` login from first boot) to see each registered
+device, its group, its current Target and when it last checked in. That is the
+fleet view for the workshop; this fork adds no dashboard of its own.
 
 ## The UNO Q app
 

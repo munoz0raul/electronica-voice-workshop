@@ -10,7 +10,7 @@ update-server managing container apps on an Arduino UNO Q.
   Target, and roll it out.
 - [Workshop](WORKSHOP.md): the loop. Retrain the Edge Impulse model, rebuild
   the assets app, upload a new Target, roll it out to the UNO Q, and watch it
-  land on the status page.
+  land in the update-server's `:8080/devices` view.
 - [Architecture](ARCHITECTURE.md): the components, the demo Wi-Fi, and the
   update flow.
 

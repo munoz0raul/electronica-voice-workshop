@@ -55,11 +55,11 @@ and copy its `ostree_repo` into `build/saved/<board>/`.
 ## 3. Build the app images
 
 ```sh
-./build-apps.sh                 # images/<app>.oci.tar for all three apps
+./build-apps.sh                 # images/<app>.oci.tar for both apps
 ```
 
-**Check:** `images/` holds `webapp-led-mcu-voice.oci.tar`,
-`webapp-led-mcu-voice-assets.oci.tar` and `status-page.oci.tar`.
+**Check:** `images/` holds `webapp-led-mcu-voice.oci.tar` and
+`webapp-led-mcu-voice-assets.oci.tar`.
 
 ## 4. Register the boards
 
@@ -86,31 +86,26 @@ ssh -t -J root@<ventuno-q-ip> root@<uno-q-ip> 'fio-device-register -n "$(hostnam
 fiocli devices list --columns uuid,name,group,tag
 ```
 
-## 5. Put the boards in groups
+## 5. Put the UNO Q in a group
 
-Rollouts target groups. Create one for the server and one for the device, then
-move each board in (group names are yours; these match the docs):
+Rollouts target groups. The UNO Q is the only device that receives updates, so
+put it in a group (the name is yours; this matches the docs):
 
 ```sh
-fiocli devices update <ventuno-q-uuid> --group demo-server
 fiocli devices update <uno-q-uuid> --group demo
 ```
 
-**Check:** `fiocli devices list --columns name,group` shows the two groups.
+The VENTUNO Q is the server and receives no app rollout, so it needs no group;
+it stays registered and visible in the fleet.
 
-## 6. Stage and upload the Targets
+**Check:** `fiocli devices list --columns name,group` shows the UNO Q in `demo`.
+
+## 6. Stage and upload the UNO Q Target
 
 `tools/stage-target.sh` assembles a Target directory (OS + staged apps). Upload
-each with the tag `main`; the server versions each upload higher than the last.
-
-VENTUNO Q — the status page:
-
-```sh
-tools/stage-target.sh ventuno-q build/saved/ventuno-q-0/ostree_repo status-page
-fiocli updates upload main ventuno-q-0 ./targets/ventuno-q/
-```
-
-UNO Q — the voice app and its model carrier:
+it with the tag `main`; the server versions each upload higher than the last.
+Only the UNO Q receives updates; the VENTUNO Q is the server and needs no
+Target (its OS is already flashed).
 
 ```sh
 tools/stage-target.sh uno-q build/saved/uno-q-0/ostree_repo \
@@ -118,13 +113,11 @@ tools/stage-target.sh uno-q build/saved/uno-q-0/ostree_repo \
 fiocli updates upload main uno-q-voice-0 ./targets/uno-q/
 ```
 
-**Check:** `fiocli updates list` shows `ventuno-q-0` and `uno-q-voice-0`, tag
-`main`.
+**Check:** `fiocli updates list` shows `uno-q-voice-0`, tag `main`.
 
 ## 7. Roll out
 
 ```sh
-fiocli updates create-rollout ventuno-q-0 setup-ventuno setup-ventuno --groups demo-server
 fiocli updates create-rollout uno-q-voice-0 setup-uno setup-uno --groups demo
 ```
 
@@ -135,26 +128,8 @@ every 5 s in the demo image), pulls the apps and starts them.
 
 - The voice app's UI loads at `http://<uno-q-ip>:8000`; say "select" then a
   colour and the matrix + RGB LEDs react.
-- The status page loads at `http://<ventuno-q-ip>:8081` and lists the UNO Q
-  with its current Target and version. If it shows a token error, see
-  [the status-page token](#status-page-token).
-
-## Status-page token
-
-The status page reads the update-server API, which needs a Bearer token
-(`apps/status-page/README.md`). It looks for, in order: env `STATUS_TOKEN`,
-`/run/secrets/status-token`, `/run/secrets/dashboard-token`.
-
-The production path is to deliver a token to the VENTUNO Q as a fioconfig
-secret named `status-token` (encrypted, mounted at `/run/secrets`). The quick
-path for a local run is to set `STATUS_TOKEN` in
-`apps/status-page/docker-compose.yml` before staging — but a token committed to
-the repo is a secret leak, so don't push it.
-
-**Unverified:** the upstream demo minted this token through a dashboard setup
-page that this fork removed. Obtaining a valid update-server token for the
-status page has not been re-tested here; confirm your update-server's token
-mechanism before the workshop.
+- The update-server's web UI at `http://<ventuno-q-ip>:8080/devices` (login
+  `admin`/`admin`) lists the UNO Q with its current Target and version.
 
 ## Next
 

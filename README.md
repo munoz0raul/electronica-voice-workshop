@@ -19,13 +19,13 @@ demos are removed. What's left is the app-management path.
 ┌──────────────────────────────┐        demo Wi-Fi        ┌─────────────────────────────────┐
 │ VENTUNO Q  (server)          │ ◀──  OTA + config  ──▶   │ UNO Q  (end device)             │
 │  - Foundries update-server   │                          │  - webapp-led-mcu-voice         │
-│  - status-page (:8081)       │                          │  - webapp-led-mcu-voice-assets  │
+│    (web UI on :8080)         │                          │  - webapp-led-mcu-voice-assets  │
 └──────────────────────────────┘                          └─────────────────────────────────┘
 ```
 
-- **VENTUNO Q** runs the update-server (the FoundriesFactory replacement) and a
-  minimal [`status-page`](apps/status-page) showing each device's current
-  Target and version.
+- **VENTUNO Q** runs the update-server (the FoundriesFactory replacement) and
+  runs no managed apps of its own. Watch each device's current Target and
+  version in the update-server's web UI at `http://<ventuno-q-ip>:8080/devices`.
 - **UNO Q** runs [`webapp-led-mcu-voice`](apps/webapp-led-mcu-voice) — Edge
   Impulse keyword spotting that lights the RGB LEDs and 8×13 matrix — alongside
   [`webapp-led-mcu-voice-assets`](apps/webapp-led-mcu-voice-assets), which
@@ -37,7 +37,6 @@ demos are removed. What's left is the app-management path.
 | --- | --- | --- |
 | [`webapp-led-mcu-voice`](apps/webapp-led-mcu-voice) | UNO Q | Voice→LED/matrix, web UI on `:8000` |
 | [`webapp-led-mcu-voice-assets`](apps/webapp-led-mcu-voice-assets) | UNO Q | Delivers the baked-in Edge Impulse model |
-| [`status-page`](apps/status-page) | VENTUNO Q | Shows the fleet's current Target/version on `:8081` |
 
 ## Getting started
 

@@ -53,6 +53,12 @@ local_conf_header:
     # Foundries update-server as a host service (meta-demo update-server)
     IMAGE_INSTALL:append:ventuno-q = " update-server"
 
+  poll-and-build: |
+    # Git-driven OTA: a systemd timer that watches the workshop repo and stages
+    # a new Target when an app changes (meta-demo poll-and-build). RDEPENDS pulls
+    # the loop's tools (git, fiocli, docker-buildx, python3-pyyaml, composectl).
+    IMAGE_INSTALL:append:ventuno-q = " poll-and-build"
+
   dashboard-data: |
     # /var/local/dashboard for the dashboard's demo-mode state (meta-demo dashboard-data)
     IMAGE_INSTALL:append:ventuno-q = " dashboard-data"

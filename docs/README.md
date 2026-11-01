@@ -5,16 +5,11 @@ update-server managing container apps on an Arduino UNO Q.
 
 ## Running the workshop
 
-- [Reproduce from flashing](REPRODUCE.md): the short end-to-end path — the three
-  flash/ostree artifacts you must stash, flashing both boards, provisioning the
-  self-building `poll-and-build` loop, and shipping an app update. Browser-only
-  on your laptop.
-- [Setup](SETUP.md): from flashed boards to a running app. Prerequisites,
-  register the boards with the update-server, stage and upload the first
-  Target, and roll it out.
-- [Workshop](WORKSHOP.md): the loop. Retrain the Edge Impulse model, rebuild
-  the assets app, upload a new Target, roll it out to the UNO Q, and watch it
-  land in the update-server's `:8080/devices` view.
+- [Reproduce from flashing](REPRODUCE.md): the single end-to-end runbook — the
+  three flash/ostree artifacts you must stash, flashing both boards, registering
+  them, provisioning the self-building `poll-and-build` loop, and the live
+  retrain→OTA loop (with troubleshooting and a manual-path appendix).
+  Browser-and-`git`-only on your laptop.
 - [Architecture](ARCHITECTURE.md): the components, the demo Wi-Fi, and the
   update flow.
 

@@ -616,4 +616,4 @@ reach the fleet within seconds:
 OSTree ships `/etc/default/fioconfig` as `/usr/etc/default/fioconfig` and
 copies it to `/etc` on first boot. An OS update with a new interval replaces
 it only if the file hasn't been edited on the device. This 5 s poll is why a
-rollout reaches the UNO Q within seconds in the [workshop loop](WORKSHOP.md).
+rollout reaches the UNO Q within seconds in the [workshop loop](REPRODUCE.md).

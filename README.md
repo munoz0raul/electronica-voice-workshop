@@ -40,10 +40,9 @@ demos are removed. What's left is the app-management path.
 
 ## Getting started
 
-- [docs/SETUP.md](docs/SETUP.md) — register the boards with the update-server
-  and push the first app update.
-- [docs/WORKSHOP.md](docs/WORKSHOP.md) — the workshop loop: retrain the model,
-  rebuild the assets app, upload a new Target, roll it out, watch it land.
+- [docs/REPRODUCE.md](docs/REPRODUCE.md) — the single end-to-end runbook: flash
+  both boards, register them, provision the self-building `poll-and-build` loop,
+  then run the live retrain→OTA loop. Browser-and-`git`-only on your laptop.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — components and the update flow.
 - [docs/README.md](docs/README.md) — documentation index.
 

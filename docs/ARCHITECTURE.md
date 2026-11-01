@@ -32,7 +32,7 @@ Zephyr firmware on its on-board STM32U5.
 
 Each app is a Docker Compose application delivered in a Target and run by
 aktualizr-lite. The two UNO Q apps are built by `build-apps.sh` and staged into
-Targets by `tools/stage-target.sh`; see [SETUP.md](SETUP.md).
+Targets by `tools/stage-target.sh`; see [REPRODUCE.md](REPRODUCE.md).
 
 ## The OTA flow
 
@@ -50,7 +50,7 @@ locally:
 4. A Target that changes only apps (same `ostree_repo`) is an **app-only**
    update: fast, no reboot. A changed OS hash is an OS update and reboots.
 
-The workshop loop ([WORKSHOP.md](WORKSHOP.md)) is step 2–4 repeated: a new model
+The workshop loop ([REPRODUCE.md](REPRODUCE.md)) is step 2–4 repeated: a new model
 is a new build of the assets app → a new Target → a rollout to the `demo` group.
 
 ## update-server host service

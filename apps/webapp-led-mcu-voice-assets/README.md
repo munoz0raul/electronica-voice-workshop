@@ -14,7 +14,8 @@ device-side polling.
 
 1. Retrain in Edge Impulse and download the Linux (AARCH64) `.eim`.
 2. Replace `deployment.eim` in this directory.
-3. Rebuild and roll out — see [`docs/WORKSHOP.md`](../../docs/WORKSHOP.md).
+3. Push to `main` and the VENTUNO Q's `poll-and-build` ships it — see
+   [`docs/REPRODUCE.md`](../../docs/REPRODUCE.md).
 
 ## Build
 

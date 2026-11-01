@@ -13,7 +13,7 @@
 #       webapp-led-mcu-voice webapp-led-mcu-voice-assets
 #   fiocli updates upload main uno-q-voice ./targets/uno-q-voice/
 #
-# See docs/SETUP.md and docs/WORKSHOP.md.
+# See docs/REPRODUCE.md.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

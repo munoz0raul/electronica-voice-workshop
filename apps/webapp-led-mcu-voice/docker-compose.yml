@@ -12,7 +12,6 @@ services:
     group_add:
       - "audio"
     volumes:
-      - /etc/localtime:/etc/localtime:ro
       # Shared with the assets app: it drops the current model here.
       - /var/local/assets:/var/local/assets
     environment:

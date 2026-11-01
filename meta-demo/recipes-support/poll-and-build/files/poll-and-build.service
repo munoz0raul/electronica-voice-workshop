@@ -1,0 +1,23 @@
+# Rebuild changed apps and ship a new OTA Target when the workshop repo moves.
+# Triggered by poll-and-build.timer, not run directly. Needs the Ethernet
+# uplink (GitHub + Docker Hub for base/buildkit images) and the local
+# update-server on :8080.
+[Unit]
+Description=Poll the workshop repo and stage a new OTA Target
+After=network-online.target fioserver.service docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# systemd starts services with no HOME; fiocli needs it to find its token at
+# ~/.config/fiocli.yaml (saved by the one-time `fiocli login`). Without it the
+# upload/rollout steps fail with "failed to get config path: $HOME is not defined".
+Environment=HOME=/root
+EnvironmentFile=-@SYSCONFDIR@/default/poll-and-build
+ExecStart=@BINDIR@/poll-and-build
+# Builds are background work: stay out of the way of the server and the AP.
+Nice=10
+IOSchedulingClass=idle
+# A clean clone + a heavy image build can take a while on first run.
+TimeoutStartSec=3600

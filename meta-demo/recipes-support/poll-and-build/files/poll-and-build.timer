@@ -1,0 +1,14 @@
+# Check the workshop repo for app changes on a fixed interval. The service it
+# starts does the real work (fetch, build, stage, upload) only when something
+# under apps/ actually changed, so firing often is cheap.
+[Unit]
+Description=Periodic workshop-repo poll for new app Targets
+
+[Timer]
+# First check shortly after boot, then every INTERVAL of idle time.
+OnBootSec=3min
+OnUnitInactiveSec=@INTERVAL@
+AccuracySec=20s
+
+[Install]
+WantedBy=timers.target

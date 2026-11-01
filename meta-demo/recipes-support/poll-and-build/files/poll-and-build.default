@@ -1,0 +1,25 @@
+# Config for the poll-and-build service (poll-and-build.sh). Edit on the device.
+# The private-repo credential (deploy key or token) and the one-time
+# `fiocli login` are provisioned separately, not set here. See the recipe README.
+
+# Repo to watch and the branch to track
+REPO_URL=https://github.com/munoz0raul/electronica-voice-workshop
+BRANCH=main
+
+# Only rebuild when something under this path changes (skip OS/docs commits)
+WATCH_PATH=apps
+
+# Apps staged into every Target (the whole UNO Q app set; unchanged ones ride
+# along by their existing digest and cost no download on the device)
+APPS="webapp-led-mcu-voice webapp-led-mcu-voice-assets"
+
+# Target tag devices take, and the rollout group
+TAG=main
+GROUP=demo
+
+# 1 = upload AND roll out to GROUP; 0 = upload only (instructor rolls out by hand)
+AUTO_ROLLOUT=1
+
+# Working area and the provisioned UNO Q OS half copied into each Target
+# WORKDIR=/var/lib/poll-and-build
+# OSTREE_REPO=/var/lib/poll-and-build/uno-q-ostree_repo

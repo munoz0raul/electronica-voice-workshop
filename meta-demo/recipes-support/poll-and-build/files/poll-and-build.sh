@@ -101,11 +101,27 @@ done
 # --- stage + upload ----------------------------------------------------------
 [ -d "${OSTREE_REPO}" ] || die "UNO Q ostree_repo not found at ${OSTREE_REPO} (provision it once)"
 
+# Upload a target; tolerate 409 (already exists) so a partial re-run caused
+# by an earlier failure can skip targets that were already uploaded and
+# continue staging/uploading the ones that weren't.
+upload_target() {
+    local tag=$1 tname=$2 dir=$3
+    local out
+    # && suppresses set -e so the failure is caught by the if below.
+    out=$(fiocli updates upload "$tag" "$tname" "$dir" 2>&1) && return 0
+    if echo "$out" | grep -q "already exists"; then
+        log "target $tname already exists; skipping upload"
+        return 0
+    fi
+    echo "$out" >&2
+    return 1
+}
+
 name="voice-${new:0:7}"
 log "staging UNO Q target"
 tools/stage-target.sh uno-q "${OSTREE_REPO}" ${APPS}
 log "uploading uno-q target as ${name} (tag ${TAG})"
-fiocli updates upload "${TAG}" "${name}" ./targets/uno-q/
+upload_target "${TAG}" "${name}" ./targets/uno-q/
 
 if [ -d "${VENTUNO_OSTREE_REPO}" ]; then
     # The update server requires a unique name per tag, so VENTUNO Q gets its
@@ -117,7 +133,7 @@ if [ -d "${VENTUNO_OSTREE_REPO}" ]; then
     log "staging VENTUNO Q target"
     tools/stage-target.sh ventuno-q "${VENTUNO_OSTREE_REPO}" ${APPS}
     log "uploading ventuno-q target as ${vname} (tag ${TAG})"
-    fiocli updates upload "${TAG}" "${vname}" ./targets/ventuno-q/
+    upload_target "${TAG}" "${vname}" ./targets/ventuno-q/
 else
     log "VENTUNO Q ostree_repo not found at ${VENTUNO_OSTREE_REPO}; skipping ventuno-q target"
     vname=""
@@ -130,7 +146,7 @@ if [ -d "${IQ9_OSTREE_REPO}" ]; then
     log "staging IQ-9075 EVK target"
     tools/stage-target.sh iq-9075-evk "${IQ9_OSTREE_REPO}" ${APPS}
     log "uploading iq-9075-evk target as ${iname} (tag ${TAG})"
-    fiocli updates upload "${TAG}" "${iname}" ./targets/iq-9075-evk/
+    upload_target "${TAG}" "${iname}" ./targets/iq-9075-evk/
 else
     log "IQ9 ostree_repo not found at ${IQ9_OSTREE_REPO}; skipping iq-9075-evk target"
     iname=""

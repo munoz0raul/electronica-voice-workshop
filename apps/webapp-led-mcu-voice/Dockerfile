@@ -69,3 +69,4 @@ RUN chmod +x /app/start.sh
 WORKDIR /app
 
 CMD ["/app/start.sh"]
+# trigger rebuild after oci cache cleared

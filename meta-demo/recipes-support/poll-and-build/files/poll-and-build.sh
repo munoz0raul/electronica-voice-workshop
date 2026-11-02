@@ -117,6 +117,18 @@ upload_target() {
     return 1
 }
 
+create_rollout() {
+    local tname=$1 rname=$2 group=$3
+    local out
+    out=$(fiocli updates create-rollout "$tname" "$rname" --groups "$group" 2>&1) && return 0
+    if echo "$out" | grep -q "already exists"; then
+        log "rollout $rname already exists; skipping"
+        return 0
+    fi
+    echo "$out" >&2
+    return 1
+}
+
 name="voice-${new:0:7}"
 log "staging UNO Q target"
 tools/stage-target.sh uno-q "${OSTREE_REPO}" ${APPS}
@@ -154,14 +166,14 @@ fi
 
 if [ "${AUTO_ROLLOUT}" = "1" ]; then
     log "rolling out ${name} to group ${GROUP}"
-    fiocli updates create-rollout "${name}" "auto-${new:0:7}" --groups "${GROUP}"
+    create_rollout "${name}" "auto-${new:0:7}" "${GROUP}"
     if [ -n "${vname}" ]; then
         log "rolling out ${vname} to group ${GROUP}"
-        fiocli updates create-rollout "${vname}" "auto-${new:0:7}-ventuno" --groups "${GROUP}"
+        create_rollout "${vname}" "auto-${new:0:7}-ventuno" "${GROUP}"
     fi
     if [ -n "${iname}" ]; then
         log "rolling out ${iname} to group ${GROUP}"
-        fiocli updates create-rollout "${iname}" "auto-${new:0:7}-iq9" --groups "${GROUP}"
+        create_rollout "${iname}" "auto-${new:0:7}-iq9" "${GROUP}"
     fi
 fi
 

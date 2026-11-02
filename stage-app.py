@@ -327,11 +327,8 @@ def make_app_blobs(bundle, hashes):
 
 
 def remove_other_versions(composectl, store, app_name, app_digest):
-    """Drop earlier versions of the app: the update-server reads one version per app name.
-
-    `composectl rm` also prunes the blobs no remaining app uses, so other apps
-    staged in the same store keep theirs.
-    """
+    """Drop earlier versions of the app: the update-server reads one version per app name."""
+    import shutil
     app_dir = os.path.join(store, "apps", app_name)
     if not os.path.isdir(app_dir):
         return
@@ -339,11 +336,12 @@ def remove_other_versions(composectl, store, app_name, app_digest):
     if not others:
         return
     print(f"removing {app_name} {', '.join(others)} from {store}")
-    with tempfile.TemporaryDirectory(prefix="stage-app-") as compose_root:
-        rc = subprocess.run([composectl, "--store", store, "--compose", compose_root,
-                             "rm", app_name]).returncode
-    if rc != 0:
-        die(f"composectl rm {app_name} failed (exit {rc})")
+    # composectl rm refuses to operate on an app that is running on the host,
+    # even when --store points to a staging directory rather than the live
+    # device store.  Direct removal is safe here: this is a build-side staging
+    # area, not a live composectl store, so leaving orphaned blobs is fine.
+    for digest in others:
+        shutil.rmtree(os.path.join(app_dir, digest), ignore_errors=True)
 
 
 def parse_image_args(values, compose):

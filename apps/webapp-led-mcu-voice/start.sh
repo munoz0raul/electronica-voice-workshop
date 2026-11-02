@@ -46,12 +46,14 @@ load_snd_usb_audio
 
 # Recreate /dev/mcu-console inside the container.  Host symlinks are not
 # mirrored into the container's /dev; only real device nodes are.
+# Check ttyACM0 first: VENTUNO Q exposes a stale ttyHS1 alongside ttyACM0, so
+# ttyACM0 must win.  UNO Q never has ttyACM0, so the elif branch handles it.
 if [ -z "${MCU_PORT:-}" ]; then
-    if [ -e /dev/ttyHS1 ]; then
-        ln -sf ttyHS1 /dev/mcu-console 2>/dev/null || true
-        MCU_PORT=/dev/mcu-console
-    elif [ -e /dev/ttyACM0 ]; then
+    if [ -e /dev/ttyACM0 ]; then
         ln -sf ttyACM0 /dev/mcu-console 2>/dev/null || true
+        MCU_PORT=/dev/mcu-console
+    elif [ -e /dev/ttyHS1 ]; then
+        ln -sf ttyHS1 /dev/mcu-console 2>/dev/null || true
         MCU_PORT=/dev/mcu-console
     else
         MCU_PORT=/dev/mcu-console

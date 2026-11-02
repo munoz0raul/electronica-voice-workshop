@@ -15,7 +15,7 @@ import socket
 from contextlib import contextmanager
 from queue import Queue
 from weakref import WeakSet
-from flask import Flask, Response, send_file, send_from_directory
+from flask import Flask, Response, request, send_file, send_from_directory
 import logging
 from edge_impulse_linux.audio import AudioImpulseRunner
 
@@ -178,6 +178,10 @@ voice_shutdown_event = threading.Event()
 voice_thread = None
 voice_started = False
 last_audio_ts = 0.0
+
+# Runtime mic device override — set via POST /device; None means use PA_ALSA_DEVICE env.
+_device_id_override = None
+_device_lock = threading.Lock()
 
 # Watchdog configuration
 WATCHDOG_POLL_SECONDS = _env_float("WATCHDOG_POLL_SECONDS", 2.0)
@@ -365,12 +369,12 @@ def _suppress_stderr():
         except Exception:
             pass
 
-def _restart_voice_recognition(reason: str = ""):
+def _restart_voice_recognition(reason: str = "", force: bool = False):
     global voice_thread, voice_started, last_audio_ts, last_audio_restart_ts
     if not VOICE_ENABLED:
         return
     now = time.time()
-    if (now - last_audio_restart_ts) < AUDIO_RESTART_MIN_SECONDS:
+    if not force and (now - last_audio_restart_ts) < AUDIO_RESTART_MIN_SECONDS:
         return
     last_audio_restart_ts = now
     if DEBUG:
@@ -406,10 +410,11 @@ def _voice_recognition_loop():
 
     last_audio_ts = time.time()
     while not voice_shutdown_event.is_set():
-        # Device ID selection (from environment)
-        selected_device_id = _env_int("PA_ALSA_DEVICE")
+        # Device ID: runtime override (from /device POST) takes priority over env.
+        with _device_lock:
+            selected_device_id = _device_id_override if _device_id_override is not None else _env_int("PA_ALSA_DEVICE")
         if selected_device_id is not None:
-            log(f"Audio device (ALSA): {selected_device_id}")
+            log(f"Audio device: {selected_device_id}")
 
         try:
             with AudioImpulseRunner(VOICE_MODEL_PATH) as runner:
@@ -615,6 +620,23 @@ def _get_local_ips() -> list[str]:
     ips.discard("0.0.0.0")
     return sorted(ips)
 
+def _list_audio_devices() -> list:
+    """Return PortAudio input devices as [{id, name}]. Uses pyaudio (dep of edge_impulse_linux)."""
+    try:
+        import pyaudio
+        p = pyaudio.PyAudio()
+        devices = []
+        for i in range(p.get_device_count()):
+            info = p.get_device_info_by_index(i)
+            if info.get('maxInputChannels', 0) > 0:
+                devices.append({'id': i, 'name': info['name']})
+        p.terminate()
+        return devices
+    except Exception as e:
+        log(f"Device listing failed: {e}")
+        return []
+
+
 # Routes
 @app.route('/')
 def index():
@@ -638,6 +660,27 @@ def status_stream():
             status_connections.discard(q)
 
     return Response(event_stream(), mimetype='text/event-stream')
+
+@app.route('/devices')
+def list_devices():
+    """List available PortAudio input devices."""
+    with _device_lock:
+        current = _device_id_override if _device_id_override is not None else _env_int("PA_ALSA_DEVICE")
+    return json.dumps({'devices': _list_audio_devices(), 'current': current}), 200, {'Content-Type': 'application/json'}
+
+@app.route('/device', methods=['POST'])
+def set_device():
+    """Set the active capture device. Body: {id: <int>} or {id: null} to revert to env."""
+    global _device_id_override
+    data = request.get_json(silent=True) or {}
+    device_id = data.get('id')
+    if device_id is not None and not isinstance(device_id, int):
+        return ('Bad Request', 400)
+    with _device_lock:
+        _device_id_override = device_id
+    log(f"Device override set to {device_id}; restarting voice runner")
+    threading.Thread(target=_restart_voice_recognition, kwargs={'reason': 'device change', 'force': True}, daemon=True).start()
+    return ('', 204)
 
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):

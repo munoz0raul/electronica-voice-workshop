@@ -91,12 +91,12 @@ ssh -t -J root@<ventuno-q-ip> root@<uno-q-ip> 'fio-device-register -n "$(hostnam
 
 Both appear in **Devices** at `http://<ventuno-q-ip>:8080`, tagged `main`.
 
-## 3. Put the UNO Q in group `demo`
+## 3. Put both boards in group `demo`
 
 In the `:8080` UI: **Devices → the UNO Q → Manage (labels)**, add a label named
-`group` with value `demo`, Save. The VENTUNO Q is server-only and needs no group.
-A rollout enrolls whoever is in the group **when it is created**, so do this
-before any rollout runs.
+`group` with value `demo`, Save. Repeat for the VENTUNO Q (it also runs the voice
+app and receives its own OTA updates). A rollout enrolls whoever is in the group
+**when it is created**, so do this before any rollout runs.
 
 ## 4. Provision `poll-and-build` once on the VENTUNO Q
 
@@ -116,15 +116,35 @@ Transfer `uno-q-ostree_repo-b637abb7.tgz` to the VENTUNO Q and extract it to
 `/var/lib/poll-and-build/uno-q-ostree_repo` (the directory must contain
 `refs/`, `objects/`, … directly).
 
+The VENTUNO Q's own `ostree_repo` is derived from the running system — no
+download artifact needed. Run these once after the first boot:
+
+```sh
+ssh root@<ventuno-q-ip>
+cd /var/lib/poll-and-build
+ostree --repo=ventuno-q-ostree_repo init --mode=archive
+commit=$(ostree --repo=/ostree/repo rev-parse ostree/1/1/0)
+ostree --repo=ventuno-q-ostree_repo pull-local /ostree/repo "$commit"
+ostree --repo=ventuno-q-ostree_repo refs --create=ventuno-q "$commit"
+```
+
 The timer starts itself ~3 min after boot, then every 2 min. The repo URL is
 public, so no deploy key is needed. On its first run it builds both app images on
 the board and ships the first Target to the UNO Q automatically.
 
 ## 5. Confirm the app is running
 
-The UNO Q's web UI runs on the device's `:8000`, which is on the VENTUNO's
-internal network and not directly reachable from your laptop. Tunnel it through
-the VENTUNO Q with a jump host + local forward, then open `http://localhost:8000`:
+**VENTUNO Q** — the app is reachable directly:
+
+```sh
+open http://<ventuno-q-ip>:8000
+```
+
+Say "select" then a colour (`blue green purple red yellow`) and watch the 4 RGB
+LEDs on the board react.
+
+**UNO Q** — the `:8000` UI is on the VENTUNO's internal network, not reachable
+directly from your laptop. Tunnel through the VENTUNO Q:
 
 ```sh
 ssh -L 8000:<uno-q-ip>:8000 -J root@<ventuno-q-ip> root@<uno-q-ip>
@@ -132,11 +152,11 @@ ssh -L 8000:<uno-q-ip>:8000 -J root@<ventuno-q-ip> root@<uno-q-ip>
 ssh -L 8000:10.42.0.211:8000 -J root@192.168.15.99 root@10.42.0.211
 ```
 
-Keep that session open; `http://localhost:8000` on the Mac is now the UNO Q's app
-UI. Say "select" then a colour (`blue green purple red yellow`) and watch the
-8×13 matrix + RGB LEDs react. The fleet view at
-`http://<ventuno-q-ip>:8080/devices` (`admin`/`admin`) lists the UNO Q with its
-current Target and version.
+Keep that session open; `http://localhost:8000` is now the UNO Q's app UI.
+Say "select" then a colour and watch the 8×13 matrix + sysfs status LEDs react.
+
+The fleet view at `http://<ventuno-q-ip>:8080/devices` (`admin`/`admin`) lists
+both boards with their current Targets and versions.
 
 ## 6. The workshop loop: retrain the model and watch the new version land
 
@@ -170,9 +190,9 @@ git add apps/ && git commit -m "retrain: new keyword model" && git push
 **4. The VENTUNO Q ships it itself.** Within ~2 min `poll-and-build`:
 
 1. rebuilds the changed app image on the board,
-2. stages a UNO Q Target (OS `ostree_repo` + both apps),
-3. uploads it to the `:8080` server, and
-4. rolls it out to group `demo`.
+2. stages a UNO Q Target (`voice-<sha>`) and a VENTUNO Q Target (`voice-<sha>-ventuno`), each with its own OS `ostree_repo` + both apps,
+3. uploads both to the `:8080` server, and
+4. rolls out both to group `demo` (each device applies only the target matching its hardware-id).
 
 Watch it:
 

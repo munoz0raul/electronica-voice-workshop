@@ -107,17 +107,28 @@ log "uploading uno-q target as ${name} (tag ${TAG})"
 fiocli updates upload "${TAG}" "${name}" ./targets/uno-q/
 
 if [ -d "${VENTUNO_OSTREE_REPO}" ]; then
+    # The update server requires a unique name per tag, so VENTUNO Q gets its
+    # own update name with a "-ventuno" suffix.  Its rollout targets the same
+    # group; aktualizr-lite on each device applies only the target matching
+    # its hardware-id, so UNO Q and VENTUNO Q see different OS commits even
+    # though both updates roll out to the same group.
+    vname="${name}-ventuno"
     log "staging VENTUNO Q target"
     tools/stage-target.sh ventuno-q "${VENTUNO_OSTREE_REPO}" ${APPS}
-    log "uploading ventuno-q target as ${name}"
-    fiocli updates upload "${TAG}" "${name}" ./targets/ventuno-q/
+    log "uploading ventuno-q target as ${vname} (tag ${TAG})"
+    fiocli updates upload "${TAG}" "${vname}" ./targets/ventuno-q/
 else
     log "VENTUNO Q ostree_repo not found at ${VENTUNO_OSTREE_REPO}; skipping ventuno-q target"
+    vname=""
 fi
 
 if [ "${AUTO_ROLLOUT}" = "1" ]; then
     log "rolling out ${name} to group ${GROUP}"
     fiocli updates create-rollout "${name}" "auto-${new:0:7}" --groups "${GROUP}"
+    if [ -n "${vname}" ]; then
+        log "rolling out ${vname} to group ${GROUP}"
+        fiocli updates create-rollout "${vname}" "auto-${new:0:7}-ventuno" --groups "${GROUP}"
+    fi
 fi
 
 echo "${new}" > "${STATE}"

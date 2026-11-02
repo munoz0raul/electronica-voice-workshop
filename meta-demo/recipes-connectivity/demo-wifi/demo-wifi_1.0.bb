@@ -22,7 +22,7 @@ SRC_URI = " \
     file://demo-wifi-resolved.conf \
 "
 S = "${UNPACKDIR}"
-COMPATIBLE_MACHINE = "^(uno-q|ventuno-q)$"
+COMPATIBLE_MACHINE = "^(uno-q|ventuno-q|iq-9075-evk)$"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 DEMO_WIFI_ROLE ?= "client"
@@ -164,6 +164,7 @@ FILES:${PN} = " \
 "
 RDEPENDS:${PN} = "networkmanager networkmanager-wifi"
 RDEPENDS:${PN}:append:uno-q = " iproute2 coreutils"
+RDEPENDS:${PN}:append:iq-9075-evk = " iproute2 coreutils"
 RDEPENDS:${PN}:append:ventuno-q = " hostapd dnsmasq iproute2 avahi-daemon avahi-utils"
 
 # /etc/hosts belongs to the base packages: add the server name to it at

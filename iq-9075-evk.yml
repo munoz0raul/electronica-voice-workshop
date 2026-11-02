@@ -38,12 +38,6 @@ repos:
       .: disabled
 
 local_conf_header:
-  no-demo-wifi: |
-    # demo-wifi COMPATIBLE_MACHINE is "^(uno-q|ventuno-q)$" — common.yml's
-    # IMAGE_INSTALL:append would cause a build error for iq-9075-evk. The IQ9
-    # is reached over Ethernet or its own Wi-Fi, not the VENTUNO Q's AP.
-    IMAGE_INSTALL:remove = " demo-wifi"
-
   snd-usb-audio: |
     # The USB webcam mic needs snd-usb-audio baked into the image so udev
     # autoloads it on hotplug and an ALSA card appears for the voice app.

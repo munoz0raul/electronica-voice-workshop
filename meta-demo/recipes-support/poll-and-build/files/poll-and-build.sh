@@ -28,7 +28,7 @@ set -euo pipefail
 : "${WATCH_PATH:=apps}"
 # The app set staged into each Target (the whole board, so unchanged apps ride
 # along by their existing digest and cost no download).
-: "${APPS:=webapp-led-mcu-voice webapp-led-mcu-voice-assets}"
+: "${APPS:=webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell}"
 : "${TAG:=main}"
 : "${GROUP:=demo}"
 # 1: upload AND roll out to GROUP. 0: upload only (instructor fires the rollout).

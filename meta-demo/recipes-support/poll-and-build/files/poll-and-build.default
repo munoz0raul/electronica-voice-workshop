@@ -11,7 +11,7 @@ WATCH_PATH=apps
 
 # Apps staged into every Target (the whole UNO Q app set; unchanged ones ride
 # along by their existing digest and cost no download on the device)
-APPS="webapp-led-mcu-voice webapp-led-mcu-voice-assets"
+APPS="webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell"
 
 # Target tag devices take, and the rollout group
 TAG=main

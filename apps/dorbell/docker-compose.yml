@@ -1,0 +1,35 @@
+services:
+  dorbell:
+    image: demo-server.local/dorbell:latest
+    restart: unless-stopped
+    # Host network: web UI reachable at <board-ip>:8000.
+    network_mode: host
+    # privileged: needed so start.sh can symlink /usr/lib/dsp/cdsp to the
+    # board-specific DSP dir, and so all device nodes (/dev/fastrpc-cdsp,
+    # /dev/dma_heap/system, /dev/video*) are accessible without explicit
+    # --device flags.
+    privileged: true
+    stdin_open: true
+    tty: true
+    environment:
+      DISPLAY: ":0"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # QSoC DSP share: start.sh searches here for the cdsp dir containing
+      # fastrpc_shell_unsigned_3 + libQnnHtpV*Skel.so, then symlinks it to
+      # /usr/lib/dsp/cdsp (the hardcoded path FastRPC probes in-container).
+      - /usr/share/qcom:/usr/share/qcom:ro
+      # FastRPC / ADSP host libs forwarded from QLI's flat /usr/lib/ into the
+      # container's multiarch path (ubuntu:24.04 expects aarch64-linux-gnu/).
+      # QLI does not ship libdmabufheap; qai-appbuilder does not require it.
+      - /usr/lib/libcdsprpc.so:/usr/lib/aarch64-linux-gnu/libcdsprpc.so:ro
+      - /usr/lib/libcdsprpc.so.1:/usr/lib/aarch64-linux-gnu/libcdsprpc.so.1:ro
+      - /usr/lib/libcdsprpc.so.1.0.0:/usr/lib/aarch64-linux-gnu/libcdsprpc.so.1.0.0:ro
+      - /usr/lib/libadsprpc.so:/usr/lib/aarch64-linux-gnu/libadsprpc.so:ro
+      - /usr/lib/libadsprpc.so.1:/usr/lib/aarch64-linux-gnu/libadsprpc.so.1:ro
+      - /usr/lib/libadsprpc.so.1.0.0:/usr/lib/aarch64-linux-gnu/libadsprpc.so.1.0.0:ro
+      # InsightFace buffalo_sc ONNX models for the CPU fallback backend.
+      # Pre-stage once: the dorbell run script auto-downloads them on a board
+      # with internet, or copy from another board.  If absent the CPU backend
+      # is unavailable but NPU inference is unaffected.
+      - /root/.insightface:/app/.insightface:ro

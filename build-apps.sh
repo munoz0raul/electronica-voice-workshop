@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 # arm64 apps; each builds from its own directory under apps/.
-APPS=(webapp-led-mcu-voice webapp-led-mcu-voice-assets)
+APPS=(webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell)
 
 rebuild=0
 want=()
@@ -45,6 +45,7 @@ for app in "${want[@]}"; do
     echo ">>> building $app"
     docker buildx build --builder "$BUILDER" --platform linux/arm64 \
       --provenance=false --sbom=false \
+      --network=host \
       --output type=oci,dest="$out.tmp",name=demo-server.local/$app:latest \
       "apps/$app"
     mv "$out.tmp" "$out"

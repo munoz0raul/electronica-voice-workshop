@@ -45,6 +45,11 @@ repos:
       .: disabled
 
 local_conf_header:
+  bbmask-arduino: |
+    # meta-demo ships an Arduino kernel bbappend (linux-arduino) that has no
+    # matching recipe in an IQ-9075 build; mask it to avoid a parse error.
+    BBMASK += ".*/meta-demo/recipes-kernel/linux/linux-arduino_%.bbappend"
+
   snd-usb-audio: |
     # The USB webcam mic needs snd-usb-audio baked into the image so udev
     # autoloads it on hotplug and an ALSA card appears for the voice app.

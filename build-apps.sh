@@ -13,11 +13,12 @@ APPS=(webapp-led-mcu-voice webapp-led-mcu-voice-assets)
 
 rebuild=0
 want=()
+explicit=0   # set when caller names specific apps (implies rebuild — they already ran git diff)
 for arg in "$@"; do
   case "$arg" in
   --rebuild) rebuild=1 ;;
   -*) echo "usage: $0 [--rebuild] [app ...]" >&2; exit 1 ;;
-  *) want+=("$arg") ;;
+  *) want+=("$arg"); explicit=1 ;;
   esac
 done
 [ ${#want[@]} -gt 0 ] || want=("${APPS[@]}")
@@ -34,7 +35,7 @@ mkdir -p images
 # Build when the output is missing or --rebuild was given. buildx writes to a
 # temporary file, so a failed build never leaves an output that later runs skip.
 needs_build() {
-  [ "$rebuild" = 1 ] || [ ! -e "$1" ]
+  [ "$rebuild" = 1 ] || [ ! -e "$1" ] || [ "$explicit" = 1 ]
 }
 
 for app in "${want[@]}"; do

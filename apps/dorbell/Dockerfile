@@ -26,8 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
       libatomic1 \
       libyaml-0-2 \
-      v4l-utils \
-      xvfb && \
+      v4l-utils && \
     rm -rf /var/lib/apt/lists/*
 
 RUN python3.10 -m venv /opt/venv
@@ -56,6 +55,12 @@ RUN cp /tmp/dorbell/doorbell.py /app/ && \
     rm -rf /tmp/dorbell
 
 # Entrypoint handles DSP dir detection, DOORBELL_SOC_TAG, and privilege setup.
+# Separate layer so changes above (start.sh, qnn_context) don't re-run apt.
+# xvfb provides a virtual framebuffer so cv2's Qt initialises without a real
+# X server; the doorbell window is invisible but the web UI on :8000 works.
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 

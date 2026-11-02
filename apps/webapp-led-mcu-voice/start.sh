@@ -6,12 +6,15 @@
 #
 # The MCU already runs the Zephyr LED-matrix firmware (SWD-loaded into SRAM at
 # boot by the host's zephyr-loader.service). We drive it over MCUmgr SMP on the
-# LPUART, so there is no Arduino sketch to flash or reset here. Two things this
-# board's OS image is missing, done at start instead of in the image:
+# LPUART/USB-CDC, so there is no Arduino sketch to flash or reset here. Two
+# things this board's OS image is missing, done at start instead of in the image:
 #   1. snd-usb-audio (+ deps): side-loaded with insmod so the USB mic
 #      enumerates an ALSA card. Version-locked to the running kernel.
-#   2. /dev/mcu-console: the host symlink is not reproduced in the container,
-#      so point the app at the raw UART (MCU_PORT, default /dev/ttyHS1).
+#   2. /dev/mcu-console: the host symlink is not reproduced in the container;
+#      we recreate it here, pointing at the board-appropriate UART:
+#        UNO Q:     ttyHS1   (Qualcomm LPUART)
+#        VENTUNO Q: ttyACM0  (USB-CDC Arduino)
+#      MCU_PORT can be overridden via the environment if needed.
 set -e
 
 MODULES_DIR="${MODULES_DIR:-/app/modules}"
@@ -41,8 +44,20 @@ load_snd_usb_audio() {
 
 load_snd_usb_audio
 
-export MCU_PORT="${MCU_PORT:-/dev/ttyHS1}"
-ln -sf ttyHS1 /dev/mcu-console 2>/dev/null || true
+# Recreate /dev/mcu-console inside the container.  Host symlinks are not
+# mirrored into the container's /dev; only real device nodes are.
+if [ -z "${MCU_PORT:-}" ]; then
+    if [ -e /dev/ttyHS1 ]; then
+        ln -sf ttyHS1 /dev/mcu-console 2>/dev/null || true
+        MCU_PORT=/dev/mcu-console
+    elif [ -e /dev/ttyACM0 ]; then
+        ln -sf ttyACM0 /dev/mcu-console 2>/dev/null || true
+        MCU_PORT=/dev/mcu-console
+    else
+        MCU_PORT=/dev/mcu-console
+    fi
+fi
+export MCU_PORT
 echo ">>> MCU_PORT=$MCU_PORT"
 
 echo ">>> Activating virtualenv"

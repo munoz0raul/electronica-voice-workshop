@@ -23,6 +23,7 @@ set -euo pipefail
 # sees an app-only update (no reboot). Provisioned once; see the recipe README.
 : "${OSTREE_REPO:=${WORKDIR}/uno-q-ostree_repo}"
 : "${VENTUNO_OSTREE_REPO:=${WORKDIR}/ventuno-q-ostree_repo}"
+: "${IQ9_OSTREE_REPO:=${WORKDIR}/iq9-ostree_repo}"
 # Only rebuild when something under this path changes (skip OS/docs commits).
 : "${WATCH_PATH:=apps}"
 # The app set staged into each Target (the whole board, so unchanged apps ride
@@ -122,12 +123,29 @@ else
     vname=""
 fi
 
+if [ -d "${IQ9_OSTREE_REPO}" ]; then
+    # Like the VENTUNO Q, the IQ-9075 EVK needs its own update name; its
+    # hardware-id differs so aktualizr-lite won't apply a UNO Q target to it.
+    iname="${name}-iq9"
+    log "staging IQ-9075 EVK target"
+    tools/stage-target.sh iq-9075-evk "${IQ9_OSTREE_REPO}" ${APPS}
+    log "uploading iq-9075-evk target as ${iname} (tag ${TAG})"
+    fiocli updates upload "${TAG}" "${iname}" ./targets/iq-9075-evk/
+else
+    log "IQ9 ostree_repo not found at ${IQ9_OSTREE_REPO}; skipping iq-9075-evk target"
+    iname=""
+fi
+
 if [ "${AUTO_ROLLOUT}" = "1" ]; then
     log "rolling out ${name} to group ${GROUP}"
     fiocli updates create-rollout "${name}" "auto-${new:0:7}" --groups "${GROUP}"
     if [ -n "${vname}" ]; then
         log "rolling out ${vname} to group ${GROUP}"
         fiocli updates create-rollout "${vname}" "auto-${new:0:7}-ventuno" --groups "${GROUP}"
+    fi
+    if [ -n "${iname}" ]; then
+        log "rolling out ${iname} to group ${GROUP}"
+        fiocli updates create-rollout "${iname}" "auto-${new:0:7}-iq9" --groups "${GROUP}"
     fi
 fi
 

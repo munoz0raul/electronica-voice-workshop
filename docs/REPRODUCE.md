@@ -10,17 +10,17 @@ appendix. The older SETUP.md / WORKSHOP.md were folded into this file and remove
 
 # Reproduce from flashing
 
-Everything it takes to go from two bare boards to the live retrain→OTA loop, the
-way we ran it. The VENTUNO Q is the update-server and builds the updates itself
-(the `poll-and-build` loop); the UNO Q is the end device. On your laptop you only
-need a browser and `git` — all approvals happen at the server's `:8080` web UI
+Everything it takes to go from bare boards to the live retrain→OTA (Over the Air) loop,
+the way we ran it. The VENTUNO Q is the update-server and builds the updates itself
+(the `poll-and-build` loop); the UNO Q and IQ-9075 EVK are end devices. On your laptop
+you only need a browser and `git` — all approvals happen at the server's `:8080` web UI
 (`admin`/`admin`). To rebuild the OS images themselves, see
 [BUILDING-OS.md](BUILDING-OS.md); for the matrix firmware, [BUILDING-ZEPHYR.md](BUILDING-ZEPHYR.md).
 
 ## Artifacts you must have
 
 The repo is public, so the source (both apps, `tools/`, `meta-demo/`) comes from
-a `git clone`. Three things are **large binaries kept out of git**; they are
+a `git clone`. Large binaries are kept out of git; they are
 published as release assets under
 [`images-2026-11-01`](https://github.com/munoz0raul/electronica-voice-workshop/releases/tag/images-2026-11-01).
 
@@ -29,6 +29,7 @@ published as release assets under
 | UNO Q flash image | The OS flashed on the UNO Q (QRB2210 eMMC), with `snd-usb-audio` baked in | [`uno-q-flash-image.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-flash-image.tar.gz) | 428M |
 | VENTUNO Q flash image | The OS flashed on the VENTUNO Q (eMMC + SAIL SPI-NOR), update-server + demo Wi-Fi | [`ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz) | 851M |
 | UNO Q `ostree_repo` | The UNO Q OS half, commit `b637abb7`. `poll-and-build` copies it into every Target so updates are **app-only** (no reboot). Must match the flashed UNO Q OS exactly | [`uno-q-ostree_repo-b637abb7.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-ostree_repo-b637abb7.tgz) | 291M |
+| IQ-9075 EVK flash image | The OS flashed on the IQ-9075 EVK (UFS), Weston desktop with `snd-usb-audio` baked in | _not yet published_ | ~900M |
 
 After downloading, verify against the release's
 [`SHA256SUMS`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/SHA256SUMS):
@@ -47,7 +48,7 @@ The `ostree_repo` must be the **exact** OS on the UNO Q. If you rebuild the UNO 
 image, re-export its `ostree_repo` from the build and re-stash it, or the first
 app update looks like an OS change and forces a reboot.
 
-## 1. Flash both boards
+## 1. Flash all boards
 
 Put each board in EDL and flash with `qdl` (details and EDL entry per board in
 the `qcom-flash-mac` skill / the board Quick Start Guide). Extract each tarball
@@ -68,18 +69,30 @@ cd ..
 qdl --storage emmc prog_firehose_ddr.elf rawprogram0.xml rawprogram1.xml patch0.xml patch1.xml
 ```
 
-Boot both. Log in as `root` / `oelinux123`. The VENTUNO Q comes up as the
+**IQ-9075 EVK** — EDL entry is `SW2-3` (see the Quick Start Guide). SAIL
+firmware (SPI-NOR) first, then the main image (UFS):
+
+```sh
+cd sail_nor
+qdl --storage spinor prog_firehose_ddr.elf rawprogram0.xml patch0.xml
+cd ..
+qdl --storage ufs prog_firehose_ddr.elf rawprogram*.xml patch*.xml
+```
+
+Boot all boards. Log in as `root` / `oelinux123`. The VENTUNO Q comes up as the
 update-server (`:8080`) and the demo Wi-Fi AP.
 
 Find the IPs: the VENTUNO Q's LAN address `<ventuno-q-ip>` from your DHCP leases
 (ours is `192.168.15.99`); the UNO Q's `<uno-q-ip>` from the VENTUNO's own leases
-(ours is `10.42.0.211`):
+(ours is `10.42.0.211`); the IQ-9075 EVK connects over Ethernet and gets a LAN IP
+from your router:
 
 ```sh
-ssh root@<ventuno-q-ip> cat /var/lib/demo-wifi/dhcp.leases
+ssh root@<ventuno-q-ip> cat /var/lib/demo-wifi/dhcp.leases   # UNO Q (Wi-Fi)
+# IQ9 appears in your router's DHCP leases, hostname iq-9075-evk-<serial>
 ```
 
-## 2. Register both boards
+## 2. Register all boards
 
 Each board signs in with a code you approve in the browser at
 `http://<ventuno-q-ip>:8080/auth/activate` (`admin`/`admin`):
@@ -87,16 +100,17 @@ Each board signs in with a code you approve in the browser at
 ```sh
 ssh -t root@<ventuno-q-ip> 'fio-device-register -n "$(hostname)"'
 ssh -t -J root@<ventuno-q-ip> root@<uno-q-ip> 'fio-device-register -n "$(hostname)"'
+ssh -t root@<iq9-ip> 'fio-device-register -n "$(hostname)"'
 ```
 
-Both appear in **Devices** at `http://<ventuno-q-ip>:8080`, tagged `main`.
+All three appear in **Devices** at `http://<ventuno-q-ip>:8080`, tagged `main`.
 
-## 3. Put both boards in group `demo`
+## 3. Put all boards in group `demo`
 
 In the `:8080` UI: **Devices → the UNO Q → Manage (labels)**, add a label named
 `group` with value `demo`, Save. Repeat for the VENTUNO Q (it also runs the voice
-app and receives its own OTA updates). A rollout enrolls whoever is in the group
-**when it is created**, so do this before any rollout runs.
+app and receives its own OTA updates) and for the IQ-9075 EVK. A rollout enrolls
+whoever is in the group **when it is created**, so do this before any rollout runs.
 
 ## 4. Provision `poll-and-build` once on the VENTUNO Q
 
@@ -128,9 +142,34 @@ ostree --repo=ventuno-q-ostree_repo pull-local /ostree/repo "$commit"
 ostree --repo=ventuno-q-ostree_repo refs --create=ventuno-q "$commit"
 ```
 
+The IQ-9075 EVK's `ostree_repo` is also derived from its running system. Create
+it on the IQ9 and transfer it to the VENTUNO Q:
+
+```sh
+# On the IQ9:
+ssh root@<iq9-ip>
+mkdir -p /tmp/iq9-ostree_repo
+ostree --repo=/tmp/iq9-ostree_repo init --mode=archive
+commit=$(ostree --repo=/ostree/repo rev-parse ostree/1/1/0)
+ostree --repo=/tmp/iq9-ostree_repo pull-local /ostree/repo "$commit"
+ostree --repo=/tmp/iq9-ostree_repo refs --create=iq-9075-evk "$commit"
+tar czf /tmp/iq9-ostree_repo.tgz -C /tmp iq9-ostree_repo
+exit
+
+# Transfer to the VENTUNO Q:
+scp root@<iq9-ip>:/tmp/iq9-ostree_repo.tgz root@<ventuno-q-ip>:/var/lib/poll-and-build/
+ssh root@<ventuno-q-ip> 'cd /var/lib/poll-and-build && tar xzf iq9-ostree_repo.tgz'
+```
+
+Verify:
+```sh
+ssh root@<ventuno-q-ip> 'ostree --repo=/var/lib/poll-and-build/iq9-ostree_repo refs'
+# expect: iq-9075-evk
+```
+
 The timer starts itself ~3 min after boot, then every 2 min. The repo URL is
 public, so no deploy key is needed. On its first run it builds both app images on
-the board and ships the first Target to the UNO Q automatically.
+the board and ships a Target to each device in the `demo` group automatically.
 
 ## 5. Confirm the app is running
 
@@ -154,6 +193,15 @@ ssh -L 8000:10.42.0.211:8000 -J root@192.168.15.99 root@10.42.0.211
 
 Keep that session open; `http://localhost:8000` is now the UNO Q's app UI.
 Say "select" then a colour and watch the 8×13 matrix + sysfs status LEDs react.
+
+**IQ-9075 EVK** — reachable directly over Ethernet (it's on the LAN):
+
+```sh
+open http://<iq9-ip>:8000
+```
+
+Say "select" then a colour and watch the web UI update. There is no physical LED
+or matrix on the IQ9 — that is expected. The USB webcam mic is the audio source.
 
 The fleet view at `http://<ventuno-q-ip>:8080/devices` (`admin`/`admin`) lists
 both boards with their current Targets and versions.
@@ -190,9 +238,9 @@ git add apps/ && git commit -m "retrain: new keyword model" && git push
 **4. The VENTUNO Q ships it itself.** Within ~2 min `poll-and-build`:
 
 1. rebuilds the changed app image on the board,
-2. stages a UNO Q Target (`voice-<sha>`) and a VENTUNO Q Target (`voice-<sha>-ventuno`), each with its own OS `ostree_repo` + both apps,
-3. uploads both to the `:8080` server, and
-4. rolls out both to group `demo` (each device applies only the target matching its hardware-id).
+2. stages a UNO Q Target (`voice-<sha>`), a VENTUNO Q Target (`voice-<sha>-ventuno`), and — if `iq9-ostree_repo` is provisioned — an IQ-9075 EVK Target (`voice-<sha>-iq9`), each with its own OS `ostree_repo` + both apps,
+3. uploads all of them to the `:8080` server, and
+4. rolls out each to group `demo` (each device applies only the target matching its hardware-id).
 
 Watch it:
 
@@ -230,11 +278,14 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
 
 ## 7. If an update doesn't land
 
-- **Target didn't move.** Confirm the UNO Q is in group `demo` and tagged `main`
+- **Target didn't move.** Confirm the device is in group `demo` and tagged `main`
   (`fiocli devices list --columns name,group,tag` on the VENTUNO Q). A rollout
   only reaches its group, and a device only takes updates carrying its tag. A
   rollout also enrolls whoever is in the group *at creation time*, so the device
   must be in `demo` (step 3) before the rollout runs.
+- **IQ9 gets no target.** Confirm `iq9-ostree_repo` is provisioned on the VENTUNO Q
+  (`ls /var/lib/poll-and-build/iq9-ostree_repo/refs/`). Without it `poll-and-build`
+  skips the IQ9 target silently. Re-run the provisioning commands from step 4.
 - **Target moved, model didn't change.** The assets app only restarts the voice
   app when the `.eim` content differs. Confirm the file actually changed
   (`md5sum apps/webapp-led-mcu-voice-assets/deployment.eim`).

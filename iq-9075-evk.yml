@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+
+header:
+  version: 14
+
+  includes:
+    # Machine config lives in meta-qcom (not meta-qcom-arduino)
+    - repo: meta-qcom
+      file: ci/iq-9075-evk.yml
+    - repo: meta-qcom
+      file: ci/qcom-distro-sota.yml
+    - repo: meta-qcom
+      file: ci/performance.yml
+    - repo: meta-qcom
+      file: ci/base.lock.yml
+    - repo: meta-qcom
+      file: ci/capsule.yml
+    - repo: meta-qcom
+      file: ci/capsule-test-keys.yml
+    - repo: meta-qcom
+      file: ci/meta-arm.yml
+    - common.yml
+
+# TODO: verify the default image from meta-qcom/ci/iq-9075-evk.yml on the
+# build server; qcom-multimedia-image is the typical target for IQ EVKs.
+target: qcom-multimedia-image
+
+repos:
+  # this repo: local layer with the demo's OS-side pieces
+  oss-2026-foundries-demo:
+    layers:
+      meta-demo:
+  # Branch and commit: a lock file in locks/ (build-os.sh --lock)
+  meta-qcom:
+    url: https://github.com/qualcomm-linux/meta-qcom
+  meta-ai:
+    # meta-qcom's ci/qcom-distro.yml adds meta-ai (onnxruntime, tflite,
+    # llama-cpp); the demo uses none of it.
+    layers:
+      .: disabled
+
+local_conf_header:
+  no-demo-wifi: |
+    # demo-wifi COMPATIBLE_MACHINE is "^(uno-q|ventuno-q)$" — common.yml's
+    # IMAGE_INSTALL:append would cause a build error for iq-9075-evk. The IQ9
+    # is reached over Ethernet or its own Wi-Fi, not the VENTUNO Q's AP.
+    IMAGE_INSTALL:remove = " demo-wifi"
+
+  snd-usb-audio: |
+    # The USB webcam mic needs snd-usb-audio baked into the image so udev
+    # autoloads it on hotplug and an ALSA card appears for the voice app.
+    IMAGE_INSTALL:append:iq-9075-evk = " kernel-module-snd-usb-audio"
+
+  static-gids: |
+    # Fixed GIDs for wayland (weston-init) and render (systemd's udev): the
+    # kiosk app adds them by number, and dynamic IDs change between clean
+    # builds (meta-demo files/demo-group).
+    USERADDEXTENSION = "useradd-staticids"
+    USERADD_GID_TABLES = "files/demo-group"
+
+  capsule-board: |
+    # TODO: fill in after first flash. Read the ESRT GUID from the booted board:
+    #   ssh root@<iq9-ip> cat /sys/firmware/efi/esrt/entries/entry0/fw_class
+    # IQ-9075 EVK boots from UFS (not eMMC like the Arduino boards).
+    # Read partition GUIDs from the build's gpt_main0.bin or equivalent.
+    #
+    # CAPSULE_GUID = "<guid-from-esrt>"
+    # CAPSULE_FW_VERSION = "0.0.1.2"
+    # CAPSULE_FW_LSV = "0.0.1.1"
+    # CAPSULE_FLASH_TYPE = "UFS"
+    # CAPSULE_ENTRIES = "<partition list>"
+    # ... CAPSULE_ENTRY_* per partition

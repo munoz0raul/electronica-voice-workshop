@@ -31,6 +31,13 @@ repos:
   # Branch and commit: a lock file in locks/ (build-os.sh --lock)
   meta-qcom:
     url: https://github.com/qualcomm-linux/meta-qcom
+  # The lock file (locks/qli-2.1.lock.yml) pins meta-qcom-arduino; without a
+  # url: here kas would map it to /repo (the workshop root), which has no
+  # conf/layer.conf.  IQ-9075 needs no Arduino layers, so disable them all.
+  meta-qcom-arduino:
+    url: https://github.com/qualcomm-linux/meta-qcom-arduino
+    layers:
+      .: disabled
   meta-ai:
     # meta-qcom's ci/qcom-distro.yml adds meta-ai (onnxruntime, tflite,
     # llama-cpp); the demo uses none of it.

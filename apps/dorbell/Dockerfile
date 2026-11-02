@@ -26,7 +26,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 \
       libatomic1 \
       libyaml-0-2 \
-      v4l-utils && \
+      v4l-utils \
+      xvfb && \
     rm -rf /var/lib/apt/lists/*
 
 RUN python3.10 -m venv /opt/venv

@@ -49,5 +49,11 @@ export XDG_CONFIG_HOME=/tmp
 export XDG_CACHE_HOME=/tmp
 export PYTHONUNBUFFERED=1
 
+# cv2 bundles only the xcb Qt platform plugin; offscreen is not available.
+# Start a minimal virtual framebuffer so cv2's Qt initialises without an X
+# server.  The doorbell window is invisible; the web UI on :8000 is unaffected.
+Xvfb :1 -screen 0 1280x720x24 -nolisten tcp &
+export DISPLAY=:1
+
 echo "[dorbell] Starting backend=npu ..."
 exec python3 /app/doorbell.py --backend npu

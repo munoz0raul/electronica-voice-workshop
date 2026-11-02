@@ -46,18 +46,24 @@ load_snd_usb_audio
 
 # Recreate /dev/mcu-console inside the container.  Host symlinks are not
 # mirrored into the container's /dev; only real device nodes are.
-# Check ttyACM0 first: VENTUNO Q exposes a stale ttyHS1 alongside ttyACM0, so
-# ttyACM0 must win.  UNO Q never has ttyACM0, so the elif branch handles it.
+# VENTUNO Q: MCU is USB-CDC (ttyACM*).  After a hot firmware reload the minor
+# number can increment (ttyACM0 -> ttyACM1), so scan in order and take the
+# first present device.  ttyACM always wins over ttyHS1 because VENTUNO Q
+# exposes a stale ttyHS1 node alongside the real USB-CDC port.
+# UNO Q: no ttyACM*, so the loop falls through to the ttyHS1 branch.
 if [ -z "${MCU_PORT:-}" ]; then
-    if [ -e /dev/ttyACM0 ]; then
-        ln -sf ttyACM0 /dev/mcu-console 2>/dev/null || true
-        MCU_PORT=/dev/mcu-console
-    elif [ -e /dev/ttyHS1 ]; then
+    for _acm in /dev/ttyACM[0-9]; do
+        if [ -e "$_acm" ]; then
+            ln -sf "${_acm##*/}" /dev/mcu-console 2>/dev/null || true
+            MCU_PORT=/dev/mcu-console
+            break
+        fi
+    done
+    if [ -z "${MCU_PORT:-}" ] && [ -e /dev/ttyHS1 ]; then
         ln -sf ttyHS1 /dev/mcu-console 2>/dev/null || true
         MCU_PORT=/dev/mcu-console
-    else
-        MCU_PORT=/dev/mcu-console
     fi
+    : "${MCU_PORT:=/dev/mcu-console}"
 fi
 export MCU_PORT
 echo ">>> MCU_PORT=$MCU_PORT"

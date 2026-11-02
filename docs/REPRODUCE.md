@@ -83,13 +83,12 @@ Boot all boards. Log in as `root` / `oelinux123`. The VENTUNO Q comes up as the
 update-server (`:8080`) and the demo Wi-Fi AP.
 
 Find the IPs: the VENTUNO Q's LAN address `<ventuno-q-ip>` from your DHCP leases
-(ours is `192.168.15.99`); the UNO Q's `<uno-q-ip>` from the VENTUNO's own leases
-(ours is `10.42.0.211`); the IQ-9075 EVK connects over Ethernet and gets a LAN IP
-from your router:
+(ours is `192.168.15.99`); the UNO Q's `<uno-q-ip>` and the IQ-9075 EVK's `<iq9-ip>`
+from the VENTUNO's own leases — all three use the demo Wi-Fi (ours: UNO Q `10.42.0.211`,
+IQ9 `10.42.0.145`):
 
 ```sh
-ssh root@<ventuno-q-ip> cat /var/lib/demo-wifi/dhcp.leases   # UNO Q (Wi-Fi)
-# IQ9 appears in your router's DHCP leases, hostname iq-9075-evk-<serial>
+ssh root@<ventuno-q-ip> cat /var/lib/demo-wifi/dhcp.leases   # UNO Q and IQ9 (Wi-Fi)
 ```
 
 ## 2. Register all boards
@@ -100,7 +99,7 @@ Each board signs in with a code you approve in the browser at
 ```sh
 ssh -t root@<ventuno-q-ip> 'fio-device-register -n "$(hostname)"'
 ssh -t -J root@<ventuno-q-ip> root@<uno-q-ip> 'fio-device-register -n "$(hostname)"'
-ssh -t root@<iq9-ip> 'fio-device-register -n "$(hostname)"'
+ssh -t -J root@<ventuno-q-ip> root@<iq9-ip> 'fio-device-register -n "$(hostname)"'
 ```
 
 All three appear in **Devices** at `http://<ventuno-q-ip>:8080`, tagged `main`.
@@ -194,14 +193,21 @@ ssh -L 8000:10.42.0.211:8000 -J root@192.168.15.99 root@10.42.0.211
 Keep that session open; `http://localhost:8000` is now the UNO Q's app UI.
 Say "select" then a colour and watch the 8×13 matrix + sysfs status LEDs react.
 
-**IQ-9075 EVK** — reachable directly over Ethernet (it's on the LAN):
+**IQ-9075 EVK** — on the demo Wi-Fi subnet (same as the UNO Q), so tunnel through
+the VENTUNO Q:
 
 ```sh
-open http://<iq9-ip>:8000
+ssh -L 8001:<iq9-ip>:8000 -J root@<ventuno-q-ip> root@<iq9-ip>
+# ours:
+ssh -L 8001:10.42.0.145:8000 -J root@192.168.15.99 root@10.42.0.145
 ```
 
-Say "select" then a colour and watch the web UI update. There is no physical LED
-or matrix on the IQ9 — that is expected. The USB webcam mic is the audio source.
+Keep that session open; `http://localhost:8001` is now the IQ9's app UI. Say
+"select" then a colour and watch the web UI update. There is no physical LED,
+matrix, or on-board MCU on the IQ9 — that is expected. Voice recognition requires
+a USB webcam or mic plugged into the IQ9 (the web UI works without one; the app
+logs `Voice runner error: There are no audio devices available` in a loop when no
+mic is present, which is harmless).
 
 The fleet view at `http://<ventuno-q-ip>:8080/devices` (`admin`/`admin`) lists
 both boards with their current Targets and versions.
@@ -300,6 +306,24 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
 - **poll-and-build upload fails with `ref "._uno-q" …`.** AppleDouble files in
   the provisioned `ostree_repo` (see the artifacts note). Clean them on the
   VENTUNO Q: `find /var/lib/poll-and-build/uno-q-ostree_repo -name '._*' -exec rm -f {} +`.
+- **IQ9 voice app logs `Voice runner error: There are no audio devices available`
+  in a loop.** No USB mic is plugged into the IQ9. The Flask web UI still serves
+  on `:8000`; manual colour selection from the browser works. Connect a USB webcam
+  or USB mic to enable voice recognition.
+- **`poll-and-build` fails with `composectl rm webapp-led-mcu-voice … exit 1`.**
+  This happens when the VENTUNO Q is already running the exact app version being
+  staged: `stage-app.py`'s cleanup calls `composectl rm`, which refuses to remove
+  blobs referenced by the live app. Workaround: run the IQ9 target manually from
+  the VENTUNO Q (the IQ9 has no running app yet, so `composectl rm` never
+  triggers there):
+  ```sh
+  ssh root@<ventuno-q-ip>
+  cd /var/lib/poll-and-build
+  SHA=$(git -C repo rev-parse --short HEAD)
+  tools/stage-target.sh iq-9075-evk iq9-ostree_repo webapp-led-mcu-voice webapp-led-mcu-voice-assets
+  fiocli updates upload main "voice-${SHA}-iq9" ./targets/iq-9075-evk/
+  fiocli updates create-rollout "voice-${SHA}-iq9" "auto-${SHA}-iq9" --groups demo
+  ```
 
 ## 8. Reset between runs
 
@@ -315,20 +339,34 @@ git commit -am "reset model" && git push
 
 The automated path above is the recommended one. If you'd rather drive updates by
 hand — build the app images locally and upload/roll out yourself instead of via a
-`git push` — do the same four steps `poll-and-build` runs. This path needs host
+`git push` — do the same steps `poll-and-build` runs. This path needs host
 tooling the automated path does not: Docker with a `docker-container` buildx
 builder, `composectl` (for `stage-app.py`), Python 3 + PyYAML, and `fiocli`
-(matching the server), with the UNO Q's `ostree_repo` under `build/saved/uno-q-0/`.
+(matching the server), with each board's `ostree_repo` under `build/saved/`.
 
 ```sh
 ./build-apps.sh webapp-led-mcu-voice-assets                 # rebuild the changed app
+
+# UNO Q
 tools/stage-target.sh uno-q build/saved/uno-q-0/ostree_repo \
-    webapp-led-mcu-voice webapp-led-mcu-voice-assets        # stage OS + both apps
-fiocli updates upload main uno-q-voice-1 ./targets/uno-q/   # bump the name each time
-fiocli updates create-rollout uno-q-voice-1 retrain-1 --groups demo
+    webapp-led-mcu-voice webapp-led-mcu-voice-assets
+fiocli updates upload main voice-1-uno-q ./targets/uno-q/
+fiocli updates create-rollout voice-1-uno-q retrain-uno-q-1 --groups demo
+
+# VENTUNO Q
+tools/stage-target.sh ventuno-q build/saved/ventuno-q-0/ostree_repo \
+    webapp-led-mcu-voice webapp-led-mcu-voice-assets
+fiocli updates upload main voice-1-ventuno ./targets/ventuno-q/
+fiocli updates create-rollout voice-1-ventuno retrain-ventuno-1 --groups demo
+
+# IQ-9075 EVK
+tools/stage-target.sh iq-9075-evk build/saved/iq9-0/ostree_repo \
+    webapp-led-mcu-voice webapp-led-mcu-voice-assets
+fiocli updates upload main voice-1-iq9 ./targets/iq-9075-evk/
+fiocli updates create-rollout voice-1-iq9 retrain-iq9-1 --groups demo
 ```
 
 `create-rollout` takes two positionals: the uploaded Target and a name for the
-rollout. Send it to one board instead of the group with `--uuids <uno-q-uuid>`.
-The staged `ostree_repo` is the same as the flashed OS, so this stays an
-app-only update.
+rollout. Send it to one board instead of the group with `--uuids <device-uuid>`.
+The staged `ostree_repo` must match the flashed OS exactly for the update to be
+app-only (no reboot).

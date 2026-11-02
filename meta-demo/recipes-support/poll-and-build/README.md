@@ -3,10 +3,11 @@
 A self-hosted, poll-don't-push CI loop for the workshop, baked into the VENTUNO
 Q image. A `systemd` timer (`poll-and-build.timer`) watches the workshop repo
 over the Ethernet uplink; when something under `apps/` changes it rebuilds the
-image(s), stages a UNO Q Target (OS + apps), uploads it to the local
-update-server on `:8080`, and (by default) rolls it out to the `demo` group. The
-UNO Q's aktualizr-lite then pulls only the changed OCI blobs — a model swap is
-~14 MB.
+image(s), then stages and uploads a Target for each board — UNO Q
+(`voice-<sha>`), VENTUNO Q (`voice-<sha>-ventuno`), and IQ-9075 EVK
+(`voice-<sha>-iq9`, only if `iq9-ostree_repo` is provisioned) — and rolls each
+out to the `demo` group. Each device's aktualizr-lite (API (Application Programming Interface)) pulls only the changed
+OCI blobs — a model swap is ~14 MB.
 
 GitHub is only the trigger. The board reaches out; nothing reaches in, so the
 `:8080` server and the demo Wi-Fi stay off the public internet.
@@ -48,7 +49,13 @@ shipped in the image:
    `unable to probe ostree repo: ref "._uno-q" does not contain a valid object
    hash`. If you already extracted a dirty copy, clean it with
    `find "$OSTREE_REPO" -name '._*' -exec rm -f {} +`.
-4. **First voice-app image.** The Target stages both apps, so
+4. **IQ-9075 EVK OS half.** Create the IQ9 `ostree_repo` from the booted IQ9
+   and transfer it to the VENTUNO Q at
+   `/var/lib/poll-and-build/iq9-ostree_repo`. Without it the loop silently skips
+   the IQ9 target. See step 4 of [REPRODUCE.md](../../../docs/REPRODUCE.md) for
+   the exact commands. The same AppleDouble caveat applies if you route it through
+   a Mac.
+5. **First voice-app image.** The Target stages both apps, so
    `images/webapp-led-mcu-voice.oci.tar` must exist even when only the assets
    (model) app changed. It builds on first run (egress + disk are ample on the
    board), or drop a prebuilt tarball into the checkout's `images/`.

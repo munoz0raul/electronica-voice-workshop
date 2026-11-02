@@ -58,7 +58,7 @@ RUN cp /tmp/dorbell/doorbell.py /app/ && \
 # Separate layer so changes above (start.sh, qnn_context) don't re-run apt.
 # xvfb provides a virtual framebuffer so cv2's Qt initialises without a real
 # X server; the doorbell window is invisible but the web UI on :8000 works.
-RUN apt-get update && apt-get install -y --no-install-recommends xvfb \
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb gosu \
     && rm -rf /var/lib/apt/lists/*
 
 COPY start.sh /app/start.sh

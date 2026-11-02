@@ -32,3 +32,7 @@ services:
       # with internet, or copy from another board.  If absent the CPU backend
       # is unavailable but NPU inference is unaffected.
       - /root/.insightface:/app/.insightface:ro
+      # Weston XWayland socket: allows cv2/Qt to draw on the physical screen.
+      # start.sh detects the socket owner UID and drops to it via gosu so
+      # Weston's UID-based auth passes.  Falls back to Xvfb if absent.
+      - /tmp/.X11-unix:/tmp/.X11-unix

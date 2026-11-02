@@ -62,6 +62,11 @@ local_conf_header:
     USERADDEXTENSION = "useradd-staticids"
     USERADD_GID_TABLES = "files/demo-group"
 
+  fioefi: |
+    # Overrides common.yml: fioefi requires CAPSULE_GUID/CAPSULE_FW_VERSION
+    # from the board's ESRT; not yet configured for iq-9075-evk.
+    # Remove this override (and fill in capsule-board below) after first flash.
+
   capsule-board: |
     # TODO: fill in after first flash. Read the ESRT GUID from the booted board:
     #   ssh root@<iq9-ip> cat /sys/firmware/efi/esrt/entries/entry0/fw_class

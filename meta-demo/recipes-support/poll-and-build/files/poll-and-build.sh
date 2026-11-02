@@ -3,10 +3,10 @@
 #
 # Runs on the VENTUNO Q from poll-and-build.timer. On each tick it fetches the
 # repo over the Ethernet uplink, and when anything under apps/ has changed since
-# the last build it rebuilds the changed app image(s), stages a Target for the
-# UNO Q (OS + both apps) and uploads it to the local update-server; optionally
-# it also creates a rollout to the demo group. The UNO Q's aktualizr-lite then
-# pulls only the changed OCI blobs (a model swap is ~14 MB).
+# the last build it rebuilds the changed app image(s), stages a Target for each
+# board (UNO Q + VENTUNO Q, both apps), uploads them to the local update-server,
+# and optionally creates a rollout to the demo group. Both boards' aktualizr-lite
+# agents pull only the changed OCI blobs (a model swap is ~14 MB).
 #
 # Config is in /etc/default/poll-and-build (EnvironmentFile). Nothing here is
 # secret: the private-repo credential (deploy key or token) and the fiocli
@@ -19,9 +19,10 @@ set -euo pipefail
 : "${WORKDIR:=/var/lib/poll-and-build}"
 : "${CHECKOUT:=${WORKDIR}/repo}"
 : "${STATE:=${WORKDIR}/last-built-sha}"
-# The UNO Q's OS half. stage-target.sh copies it into every Target so the board
+# Each board's OS half. stage-target.sh copies it into every Target so the board
 # sees an app-only update (no reboot). Provisioned once; see the recipe README.
 : "${OSTREE_REPO:=${WORKDIR}/uno-q-ostree_repo}"
+: "${VENTUNO_OSTREE_REPO:=${WORKDIR}/ventuno-q-ostree_repo}"
 # Only rebuild when something under this path changes (skip OS/docs commits).
 : "${WATCH_PATH:=apps}"
 # The app set staged into each Target (the whole board, so unchanged apps ride
@@ -99,12 +100,20 @@ done
 # --- stage + upload ----------------------------------------------------------
 [ -d "${OSTREE_REPO}" ] || die "UNO Q ostree_repo not found at ${OSTREE_REPO} (provision it once)"
 
-name="uno-q-voice-${new:0:7}"
-log "staging Target ${name}"
+name="voice-${new:0:7}"
+log "staging UNO Q target"
 tools/stage-target.sh uno-q "${OSTREE_REPO}" ${APPS}
-
-log "uploading ${name} (tag ${TAG})"
+log "uploading uno-q target as ${name} (tag ${TAG})"
 fiocli updates upload "${TAG}" "${name}" ./targets/uno-q/
+
+if [ -d "${VENTUNO_OSTREE_REPO}" ]; then
+    log "staging VENTUNO Q target"
+    tools/stage-target.sh ventuno-q "${VENTUNO_OSTREE_REPO}" ${APPS}
+    log "uploading ventuno-q target as ${name}"
+    fiocli updates upload "${TAG}" "${name}" ./targets/ventuno-q/
+else
+    log "VENTUNO Q ostree_repo not found at ${VENTUNO_OSTREE_REPO}; skipping ventuno-q target"
+fi
 
 if [ "${AUTO_ROLLOUT}" = "1" ]; then
     log "rolling out ${name} to group ${GROUP}"

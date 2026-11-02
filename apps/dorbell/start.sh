@@ -64,7 +64,9 @@ if [ -S /tmp/.X11-unix/X0 ]; then
     export DISPLAY=:0
     export XDG_RUNTIME_DIR=/run/user/${WESTON_UID}
     echo "[dorbell] Starting backend=npu as uid=${WESTON_UID} ..."
-    exec gosu "${WESTON_UID}" python3 /app/doorbell.py --backend npu
+    # gosu resets HOME from /etc/passwd; override it back to /app where the
+    # baked-in qnn_context/ lives and the .insightface volume is mounted.
+    exec gosu "${WESTON_UID}" env HOME=/app python3 /app/doorbell.py --backend npu
 else
     echo "[dorbell] No Weston display (/tmp/.X11-unix/X0 absent); using Xvfb (web UI on :8000 still works)"
     Xvfb :1 -screen 0 1280x720x24 -nolisten tcp &

@@ -45,6 +45,13 @@ repos:
       .: disabled
 
 local_conf_header:
+  go-version-qa: |
+    # The shared sstate has go-runtime 1.27.3 (from uno-q builds with
+    # meta-lts-mixins-go); IQ-9075 uses base wrynose Go 1.26.5.  Demote
+    # version-going-backwards from ERROR to WARN — we don't publish a feed.
+    WARN_QA:append = " version-going-backwards"
+    ERROR_QA:remove = " version-going-backwards"
+
   bbmask-arduino: |
     # meta-demo ships an Arduino kernel bbappend (linux-arduino) that has no
     # matching recipe in an IQ-9075 build; mask it to avoid a parse error.

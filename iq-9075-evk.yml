@@ -21,9 +21,7 @@ header:
       file: ci/meta-arm.yml
     - common.yml
 
-# TODO: verify the default image from meta-qcom/ci/iq-9075-evk.yml on the
-# build server; qcom-multimedia-image is the typical target for IQ EVKs.
-target: qcom-multimedia-image
+target: iq-9075-evk-demo-image
 
 repos:
   # this repo: local layer with the demo's OS-side pieces

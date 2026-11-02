@@ -14,6 +14,9 @@ services:
     environment:
       DISPLAY: ":0"
       PYTHONUNBUFFERED: "1"
+      # Use offscreen Qt backend when no X server is available (IQ9 has no
+      # Weston/Xwayland in OTA mode).  The web UI at :8000 is unaffected.
+      QT_QPA_PLATFORM: "offscreen"
     volumes:
       # QSoC DSP share: start.sh searches here for the cdsp dir containing
       # fastrpc_shell_unsigned_3 + libQnnHtpV*Skel.so, then symlinks it to

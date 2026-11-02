@@ -118,13 +118,27 @@
                         inset 0 0 22px rgba(var(--accent-rgb),.55);
                 }
 
-                /* Mic selector — operator-facing, de-emphasised so it never distracts during a demo. */
-                .mic-select{display:flex;align-items:center;justify-content:center;gap:8px;margin:18px 0 4px;opacity:.55;transition:opacity .2s}
-                .mic-select:hover,.mic-select:focus-within{opacity:1}
-                .mic-select label{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
-                .mic-select select{font-size:12px;color:var(--muted);background:rgba(255,240,245,.06);border:1px solid rgba(255,240,245,.18);border-radius:6px;padding:3px 8px;cursor:pointer;outline:none;max-width:260px}
-                .mic-select select:focus{border-color:rgba(170,120,245,.6)}
-                .mic-select select option{background:#31017D;color:#fff}
+                /* Gear button — fixed bottom-right, operator-facing, invisible during demo. */
+                .settings-btn{position:fixed;bottom:18px;right:18px;z-index:10;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,240,245,.18);background:rgba(255,240,245,.06);color:var(--muted);cursor:pointer;display:grid;place-items:center;opacity:.3;transition:opacity .2s,background .2s;padding:0}
+                .settings-btn:hover{opacity:1;background:rgba(255,240,245,.12)}
+                .settings-btn svg{width:18px;height:18px;pointer-events:none}
+
+                /* Modal backdrop + card */
+                .settings-modal{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:rgba(35,1,90,.72);backdrop-filter:blur(6px)}
+                .settings-modal[hidden]{display:none}
+                .settings-card{background:linear-gradient(160deg,#420A96,#31017D);border:1px solid rgba(170,120,245,.35);border-radius:16px;padding:28px 32px;min-width:320px;max-width:480px;width:90%;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+                .settings-card h2{margin:0 0 20px;font-size:18px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:10px}
+                .settings-card h2 svg{width:18px;height:18px;color:var(--violet-glow)}
+                .settings-label{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+                .settings-select{width:100%;font-size:14px;color:var(--text);background:rgba(255,240,245,.08);border:1px solid rgba(170,120,245,.35);border-radius:8px;padding:8px 12px;cursor:pointer;outline:none;appearance:none}
+                .settings-select:focus{border-color:var(--violet-glow)}
+                .settings-select option{background:#31017D;color:#fff}
+                .settings-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
+                .settings-actions button{font-size:13px;font-weight:700;padding:8px 20px;border-radius:8px;cursor:pointer;border:none}
+                .btn-cancel{background:rgba(255,240,245,.08);color:var(--muted)}
+                .btn-cancel:hover{background:rgba(255,240,245,.14)}
+                .btn-save{background:var(--violet-glow);color:#1a0040}
+                .btn-save:hover{filter:brightness(1.1)}
 
                 /* Partner logos: a quiet footer band — supporting Dragonwing, never the brightest object. */
                 .partners{display:flex;justify-content:center;margin:18px auto 0}
@@ -144,6 +158,36 @@
 <body>
     <img class="bg-mark" src="/assets/dragon-mark.png" alt="" aria-hidden="true" onerror="this.style.display='none'"/>
     <div class="bg-wave" aria-hidden="true"></div>
+
+    <!-- Gear button — operator-facing mic settings, invisible during demo -->
+    <button class="settings-btn" id="settingsBtn" aria-label="Microphone settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+    </button>
+
+    <!-- Mic settings modal -->
+    <div class="settings-modal" id="settingsModal" hidden>
+        <div class="settings-card">
+            <h2>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="22"/>
+                </svg>
+                Microphone
+            </h2>
+            <div class="settings-label">Capture device</div>
+            <select class="settings-select" id="deviceSelect">
+                <option value="">auto (use default)</option>
+            </select>
+            <div class="settings-actions">
+                <button class="btn-cancel" id="cancelBtn">Cancel</button>
+                <button class="btn-save" id="saveBtn">Save &amp; apply</button>
+            </div>
+        </div>
+    </div>
 
     <div class="container">
         <header class="brand">
@@ -181,11 +225,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="mic-select">
-            <label for="deviceSelect">Mic</label>
-            <select id="deviceSelect"><option value="">auto</option></select>
         </div>
 
         <footer class="partners">
@@ -254,23 +293,40 @@
                 setMode(lower.includes('select the color') ? 'listening' : 'live');
             }
 
-            // Mic selector — populate once on load, change triggers /device POST + restart.
+            // Gear button / mic settings modal
+            const settingsBtn = document.getElementById('settingsBtn');
+            const settingsModal = document.getElementById('settingsModal');
             const deviceSelect = document.getElementById('deviceSelect');
-            fetch('/devices').then(r => r.json()).then(({devices, current}) => {
-                devices.forEach(d => {
-                    const opt = document.createElement('option');
-                    opt.value = d.id;
-                    opt.textContent = d.name;
-                    if (d.id === current) opt.selected = true;
-                    deviceSelect.appendChild(opt);
-                });
-            }).catch(() => {});
-            deviceSelect.addEventListener('change', () => {
+            const saveBtn = document.getElementById('saveBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+
+            settingsBtn.addEventListener('click', () => {
+                // Populate dropdown fresh on each open
+                deviceSelect.innerHTML = '<option value="">auto (use default)</option>';
+                fetch('/devices').then(r => r.json()).then(({devices, current}) => {
+                    devices.forEach(d => {
+                        const opt = document.createElement('option');
+                        opt.value = d.id;
+                        opt.textContent = d.name;
+                        if (d.id === current) opt.selected = true;
+                        deviceSelect.appendChild(opt);
+                    });
+                }).catch(() => {});
+                settingsModal.hidden = false;
+            });
+
+            cancelBtn.addEventListener('click', () => { settingsModal.hidden = true; });
+            settingsModal.addEventListener('click', e => { if (e.target === settingsModal) settingsModal.hidden = true; });
+
+            saveBtn.addEventListener('click', () => {
                 const val = deviceSelect.value;
                 const id = val === '' ? null : parseInt(val, 10);
+                saveBtn.textContent = 'Applying…';
+                saveBtn.disabled = true;
                 fetch('/device', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})})
-                    .then(() => { statusTextEl.textContent = 'Reconnecting…'; setMode('offline'); })
-                    .catch(() => {});
+                    .then(() => { settingsModal.hidden = true; })
+                    .catch(() => { settingsModal.hidden = true; })
+                    .finally(() => { saveBtn.textContent = 'Save & apply'; saveBtn.disabled = false; });
             });
 
             const es = new EventSource('/status');

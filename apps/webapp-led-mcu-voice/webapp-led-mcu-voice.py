@@ -183,6 +183,25 @@ last_audio_ts = 0.0
 _device_id_override = None
 _device_lock = threading.Lock()
 
+# Persistent device config: survives container restarts and OTA updates via the
+# /var/local/assets volume shared with the assets app.
+CONFIG_PATH = os.getenv("DEVICE_CONFIG_PATH", "/var/local/assets/device_config.json")
+
+def _load_device_config():
+    try:
+        with open(CONFIG_PATH) as f:
+            return json.load(f).get("device_id")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+def _save_device_config(device_id):
+    try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        with open(CONFIG_PATH, "w") as f:
+            json.dump({"device_id": device_id}, f)
+    except Exception as e:
+        log(f"Config save failed: {e}")
+
 # Watchdog configuration
 WATCHDOG_POLL_SECONDS = _env_float("WATCHDOG_POLL_SECONDS", 2.0)
 AUDIO_WATCHDOG_SECONDS = _env_float("AUDIO_WATCHDOG_SECONDS", 15.0)
@@ -504,7 +523,8 @@ def _voice_recognition_loop():
 
         except Exception as e:
             log(f"Voice runner error: {e}")
-            time.sleep(1.0)
+            WebStatus.update_status("Audio device error — open ⚙ to change mic")
+            time.sleep(2.0)
 
 def start_voice_recognition():
     global voice_thread, voice_started, last_audio_ts
@@ -678,7 +698,8 @@ def set_device():
         return ('Bad Request', 400)
     with _device_lock:
         _device_id_override = device_id
-    log(f"Device override set to {device_id}; restarting voice runner")
+    _save_device_config(device_id)
+    log(f"Device set to {device_id} (saved to config); restarting voice runner")
     threading.Thread(target=_restart_voice_recognition, kwargs={'reason': 'device change', 'force': True}, daemon=True).start()
     return ('', 204)
 
@@ -697,6 +718,12 @@ def serve_static(filename):
     return ("Not Found", 404)
 
 def main():
+    global _device_id_override
+    saved_device = _load_device_config()
+    if saved_device is not None:
+        with _device_lock:
+            _device_id_override = saved_device
+        log(f"Loaded saved mic device: {saved_device}")
     log("Class Voice LED")
     log("Web UI endpoints:")
     log("- http://0.0.0.0:8000")

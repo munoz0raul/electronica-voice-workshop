@@ -29,7 +29,8 @@ published as release assets under
 | UNO Q flash image | The OS flashed on the UNO Q (QRB2210 eMMC), with `snd-usb-audio` baked in | [`uno-q-flash-image.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-flash-image.tar.gz) | 428M |
 | VENTUNO Q flash image | The OS flashed on the VENTUNO Q (eMMC + SAIL SPI-NOR), update-server + demo Wi-Fi | [`ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz) | 851M |
 | UNO Q `ostree_repo` | The UNO Q OS half, commit `b637abb7`. `poll-and-build` copies it into every Target so updates are **app-only** (no reboot). Must match the flashed UNO Q OS exactly | [`uno-q-ostree_repo-b637abb7.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-ostree_repo-b637abb7.tgz) | 291M |
-| IQ-9075 EVK flash image | The OS flashed on the IQ-9075 EVK (UFS), Weston desktop with `snd-usb-audio` baked in | _not yet published_ | ~900M |
+| IQ-9075 EVK flash image | The OS flashed on the IQ-9075 EVK (UFS), Weston desktop with `snd-usb-audio` baked in | [`iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz) | 832M |
+| IQ-9075 EVK `ostree_repo` | The IQ-9075 EVK OS half, commit `5c033dfc`. `poll-and-build` copies it into every IQ9 Target so updates are **app-only** (no reboot). Must match the flashed IQ9 OS exactly | [`iq9-ostree_repo-5c033dfc.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/iq9-ostree_repo-5c033dfc.tgz) | 577M |
 
 After downloading, verify against the release's
 [`SHA256SUMS`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/SHA256SUMS):
@@ -141,12 +142,19 @@ ostree --repo=ventuno-q-ostree_repo pull-local /ostree/repo "$commit"
 ostree --repo=ventuno-q-ostree_repo refs --create=ventuno-q "$commit"
 ```
 
-The IQ-9075 EVK's `ostree_repo` is also derived from its running system. Create
-it on the IQ9 and transfer it to the VENTUNO Q:
+The IQ-9075 EVK's `ostree_repo` can be downloaded from the release (it matches
+the IQ9 flash image above) and transferred directly to the VENTUNO Q:
+
+```sh
+scp iq9-ostree_repo-5c033dfc.tgz root@<ventuno-q-ip>:/var/lib/poll-and-build/
+ssh root@<ventuno-q-ip> 'cd /var/lib/poll-and-build && tar xzf iq9-ostree_repo-5c033dfc.tgz && mv iq9-ostree_repo-5c033dfc iq9-ostree_repo'
+```
+
+Alternatively, if you rebuilt the IQ9 OS image, derive it from the booted IQ9:
 
 ```sh
 # On the IQ9:
-ssh root@<iq9-ip>
+ssh -J root@<ventuno-q-ip> root@<iq9-ip>
 mkdir -p /tmp/iq9-ostree_repo
 ostree --repo=/tmp/iq9-ostree_repo init --mode=archive
 commit=$(ostree --repo=/ostree/repo rev-parse ostree/1/1/0)

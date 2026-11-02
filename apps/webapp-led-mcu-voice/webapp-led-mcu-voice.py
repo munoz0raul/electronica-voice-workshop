@@ -641,7 +641,13 @@ def _get_local_ips() -> list[str]:
     return sorted(ips)
 
 def _list_audio_devices() -> list:
-    """Return PortAudio input devices as [{id, name}]. Uses pyaudio (dep of edge_impulse_linux)."""
+    """Return PortAudio input devices as [{id, name, recommended}].
+
+    Devices named 'default' or 'sysdefault' route through ALSA's software
+    resampler and will accept the model's 16 kHz capture.  Raw hw:X,Y devices
+    are locked to the hardware sample rate (often 44100 Hz) and will fail with
+    'Invalid sample rate'.  We flag the resampling-capable ones as recommended.
+    """
     try:
         import pyaudio
         p = pyaudio.PyAudio()
@@ -649,7 +655,12 @@ def _list_audio_devices() -> list:
         for i in range(p.get_device_count()):
             info = p.get_device_info_by_index(i)
             if info.get('maxInputChannels', 0) > 0:
-                devices.append({'id': i, 'name': info['name']})
+                name = info['name']
+                # ALSA virtual devices (default, sysdefault, plug*) handle
+                # resampling; raw hw:X,Y devices do not.
+                recommended = bool(name in ('default', 'sysdefault') or
+                                   name.startswith('plug'))
+                devices.append({'id': i, 'name': name, 'recommended': recommended})
         p.terminate()
         return devices
     except Exception as e:

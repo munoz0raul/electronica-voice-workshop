@@ -182,6 +182,7 @@
             <select class="settings-select" id="deviceSelect">
                 <option value="">auto (use default)</option>
             </select>
+            <div style="font-size:11px;color:var(--muted);margin-top:8px;opacity:.75">✓ = resamples to 16 kHz; raw hw: devices need hardware support</div>
             <div class="settings-actions">
                 <button class="btn-cancel" id="cancelBtn">Cancel</button>
                 <button class="btn-save" id="saveBtn">Save &amp; apply</button>
@@ -307,7 +308,7 @@
                     devices.forEach(d => {
                         const opt = document.createElement('option');
                         opt.value = d.id;
-                        opt.textContent = d.name;
+                        opt.textContent = d.recommended ? `${d.name}  ✓` : d.name;
                         if (d.id === current) opt.selected = true;
                         deviceSelect.appendChild(opt);
                     });

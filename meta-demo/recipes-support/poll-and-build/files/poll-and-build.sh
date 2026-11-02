@@ -89,7 +89,7 @@ if ! docker buildx inspect "${BUILDX_BUILDER}" >/dev/null 2>&1; then
     log "creating buildx builder ${BUILDX_BUILDER} (docker-container)"
     docker buildx create --name "${BUILDX_BUILDER}" --driver docker-container
 fi
-./build-apps.sh "${changed[@]}"
+./build-apps.sh --rebuild "${changed[@]}"
 
 # Every app in the Target needs its image present, even unchanged ones.
 for app in ${APPS}; do

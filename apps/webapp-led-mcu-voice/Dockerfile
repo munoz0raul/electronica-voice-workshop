@@ -52,7 +52,7 @@ RUN mkdir -p /app
 COPY webapp-led-mcu-voice.py /app/
 COPY mcu_matrix.py /app/
 COPY index.html /app/index.html
-COPY assets/arduino.png assets/edgeimpulse.png assets/foundries.png assets/qualcomm.png /app/assets/
+COPY assets/ /app/assets/
 
 # snd-usb-audio and its deps for the running kernel, side-loaded at start.sh
 # because this board's OS image does not ship them (see start.sh and the app

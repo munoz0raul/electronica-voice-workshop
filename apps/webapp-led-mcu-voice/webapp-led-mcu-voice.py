@@ -107,17 +107,18 @@ def set_system_leds(color: str):
         _write_led(n, n in wanted)
 
 def set_led_color(color: str):
-    """Set the host status LEDs for the given color (blue, green, red, yellow,
-    purple, off).
+    """Set status LEDs for the given color (blue, green, red, yellow, purple, off).
 
-    These are host-side sysfs LEDs (/sys/class/leds). The STM32U5 MCU's Zephyr
-    firmware exposes only the 8x13 matrix over MCUmgr (no discrete RGB LEDs), so
-    the old per-LED "toggle_led*" bridge calls have no counterpart and are gone.
+    Two paths run independently:
+    - UNO Q: sysfs LEDs under /sys/class/leds/ (unoq:user-* nodes).
+    - VENTUNO Q: 4 RGB LEDs on the STM32H5 MCU via MCUmgr CMD_SET_LEDS.
+      On UNO Q this call returns False silently (command not in handler table).
     """
     try:
         set_system_leds(color)
     except Exception as e:
         log(f"Set LED color {color} failed: {e}")
+    matrix_mcu.set_color(color)
 
 # Flask app
 app = Flask(__name__)

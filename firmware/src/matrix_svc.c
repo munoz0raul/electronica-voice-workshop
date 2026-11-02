@@ -20,6 +20,8 @@
 #include <zephyr/mgmt/mcumgr/smp/smp.h>
 #include <mgmt/mcumgr/util/zcbor_bulk.h>
 
+#include <zephyr/drivers/gpio.h>
+
 #include "matrix.h"
 #include "mcu_log.h"
 
@@ -33,6 +35,7 @@ enum matrix_svc_cmd {
 	MATRIX_SVC_STATUS = 3,
 	MATRIX_SVC_CANCEL_PENDING = 4,
 	MATRIX_SVC_LOG = 5,
+	MATRIX_SVC_SET_LEDS = 6,
 };
 
 /* Console bytes returned per LOG response */
@@ -200,6 +203,73 @@ static int log_read(struct smp_streamer *ctxt)
 	return ok ? MGMT_ERR_EOK : MGMT_ERR_EMSGSIZE;
 }
 
+/*
+ * SET_LEDS {r: 0|1, g: 0|1, b: 0|1} -> {}
+ *
+ * Sets all 4 RGB LEDs on boards that have them (VENTUNO Q).  Needs no session.
+ * On UNO Q the handler simply does not exist; the MCUmgr framework returns
+ * MGMT_ERR_ENOTSUPPORT and the Linux caller falls back to sysfs LEDs.
+ *
+ * Each LED is ACTIVE_LOW: gpio_pin_set_dt(spec, 1) turns it on.
+ */
+#if DT_NODE_EXISTS(DT_NODELABEL(leds))
+#define N_RGB 4
+static const struct gpio_dt_spec rgb_pins[N_RGB][3] = {
+	{GPIO_DT_SPEC_GET(DT_NODELABEL(red_led_0), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(green_led_0), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(blue_led_0), gpios)},
+	{GPIO_DT_SPEC_GET(DT_NODELABEL(red_led_1), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(green_led_1), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(blue_led_1), gpios)},
+	{GPIO_DT_SPEC_GET(DT_NODELABEL(red_led_2), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(green_led_2), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(blue_led_2), gpios)},
+	{GPIO_DT_SPEC_GET(DT_NODELABEL(red_led_3), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(green_led_3), gpios),
+	 GPIO_DT_SPEC_GET(DT_NODELABEL(blue_led_3), gpios)},
+};
+
+static void rgb_leds_configure(void)
+{
+	static bool done;
+
+	if (done) {
+		return;
+	}
+	done = true;
+	for (int i = 0; i < N_RGB; i++) {
+		for (int j = 0; j < 3; j++) {
+			if (gpio_is_ready_dt(&rgb_pins[i][j])) {
+				gpio_pin_configure_dt(&rgb_pins[i][j], GPIO_OUTPUT_INACTIVE);
+			}
+		}
+	}
+}
+
+static int set_leds(struct smp_streamer *ctxt)
+{
+	uint32_t r = 0, g = 0, b = 0;
+	size_t decoded;
+	struct zcbor_map_decode_key_val keys[] = {
+		ZCBOR_MAP_DECODE_KEY_DECODER("r", zcbor_uint32_decode, &r),
+		ZCBOR_MAP_DECODE_KEY_DECODER("g", zcbor_uint32_decode, &g),
+		ZCBOR_MAP_DECODE_KEY_DECODER("b", zcbor_uint32_decode, &b),
+	};
+
+	if (zcbor_map_decode_bulk(ctxt->reader->zs, keys, ARRAY_SIZE(keys), &decoded) != 0 ||
+	    decoded != ARRAY_SIZE(keys)) {
+		return MGMT_ERR_EINVAL;
+	}
+	rgb_leds_configure();
+	for (int i = 0; i < N_RGB; i++) {
+		gpio_pin_set_dt(&rgb_pins[i][0], r ? 1 : 0);
+		gpio_pin_set_dt(&rgb_pins[i][1], g ? 1 : 0);
+		gpio_pin_set_dt(&rgb_pins[i][2], b ? 1 : 0);
+	}
+	return MGMT_ERR_EOK;
+}
+#endif /* DT_NODE_EXISTS(DT_NODELABEL(leds)) */
+
 static const struct mgmt_handler matrix_svc_handlers[] = {
 	[MATRIX_SVC_HELLO] = {.mh_write = hello},
 	[MATRIX_SVC_CLOCK_SAMPLE] = {.mh_read = clock_sample},
@@ -207,6 +277,9 @@ static const struct mgmt_handler matrix_svc_handlers[] = {
 	[MATRIX_SVC_STATUS] = {.mh_read = status},
 	[MATRIX_SVC_CANCEL_PENDING] = {.mh_write = cancel_pending},
 	[MATRIX_SVC_LOG] = {.mh_read = log_read},
+#if DT_NODE_EXISTS(DT_NODELABEL(leds))
+	[MATRIX_SVC_SET_LEDS] = {.mh_write = set_leds},
+#endif
 };
 
 static struct mgmt_group matrix_svc_group = {

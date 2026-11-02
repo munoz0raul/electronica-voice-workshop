@@ -28,6 +28,7 @@ import time
 
 GROUP = 64
 CMD_HELLO, CMD_CLOCK, CMD_RENDER, CMD_STATUS, CMD_CANCEL, CMD_LOG = range(6)
+CMD_SET_LEDS = 6
 OP_READ, OP_WRITE = 0, 2
 ROWS, COLS = 8, 13
 MATRIX_BYTES = (ROWS * COLS + 7) // 8  # 13
@@ -243,6 +244,37 @@ class MatrixMCU:
 
     def clear(self):
         return self.render_bits([0] * (ROWS * COLS))
+
+    _COLOR_RGB = {
+        "blue":   (0, 0, 1),
+        "green":  (0, 1, 0),
+        "red":    (1, 0, 0),
+        "yellow": (1, 1, 0),
+        "purple": (1, 0, 1),
+        "off":    (0, 0, 0),
+    }
+
+    def set_color(self, color: str) -> bool:
+        """Set all RGB LEDs on VENTUNO Q to a named color.
+
+        Returns True on success, False if the board does not support the command
+        (UNO Q) or the link is broken.  Never raises; never drops the link on a
+        mere MGMT_ERR_ENOTSUPPORT (RuntimeError from _SmpSerial.request).
+        """
+        rgb = self._COLOR_RGB.get(color.lower(), (0, 0, 0))
+        with self._lock:
+            try:
+                self._ensure_locked()
+                self._link.request(OP_WRITE, CMD_SET_LEDS,
+                                   {"r": rgb[0], "g": rgb[1], "b": rgb[2]})
+                return True
+            except RuntimeError:
+                # MCUmgr returned a non-zero rc (command not in handler table on
+                # UNO Q).  The link is still healthy — do NOT drop it.
+                return False
+            except Exception:
+                self._drop()
+                return False
 
 
 # --- standalone test: render the microphone icon, then clear -----------------

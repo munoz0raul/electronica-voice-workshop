@@ -21,6 +21,7 @@ trap 'echo "assets: terminating"; exit 0' INT TERM HUP
 DST="$OUT_DIR/$FILE"
 
 echo "assets: SRC=$SRC OUT_DIR=$OUT_DIR"
+echo "assets: LATENCY-PROBE build=1"
 
 mkdir -p "$OUT_DIR"
 

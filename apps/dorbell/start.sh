@@ -61,11 +61,40 @@ if [ -S /tmp/.X11-unix/X0 ]; then
     chmod -R a+rX /app 2>/dev/null || true
     # .insightface mount may be root-owned; make writable for CPU first-run download.
     chmod -R a+rwX /app/.insightface 2>/dev/null || true
+
+    # --- DSP/camera group access for the dropped uid -------------------------
+    # Dropping to uid 1000 for the Weston display loses root's blanket device
+    # access.  The HTP DSP session needs to open /dev/fastrpc-cdsp and
+    # /dev/dma_heap/system; without membership in their owning groups the
+    # session fails with status=0x72 ("Failed to load skel 1002").  The
+    # privileged container exposes these nodes with their HOST gids, so we add
+    # the target user to a group matching each node's gid (creating it if the
+    # container has no name for that gid), mirroring the upstream script's
+    # --group-add fastrpc/dmaheap/video.
+    target_user=$(getent passwd "${WESTON_UID}" | cut -d: -f1 || true)
+    if [ -z "${target_user}" ]; then
+        target_user=dorbell
+        useradd -u "${WESTON_UID}" -M -s /usr/sbin/nologin "${target_user}" 2>/dev/null || true
+    fi
+    for node in /dev/fastrpc-cdsp /dev/dma_heap/system $(ls /dev/video* 2>/dev/null); do
+        [ -e "${node}" ] || continue
+        gid=$(stat -c %g "${node}" 2>/dev/null) || continue
+        [ "${gid}" = 0 ] && continue          # root-owned node needs no group
+        gname=$(getent group "${gid}" | cut -d: -f1)
+        if [ -z "${gname}" ]; then
+            gname="dev_${gid}"
+            groupadd -g "${gid}" "${gname}" 2>/dev/null || true
+        fi
+        usermod -aG "${gname}" "${target_user}" 2>/dev/null || true
+    done
+    echo "[dorbell] granted ${target_user} groups: $(id -Gn "${target_user}" 2>/dev/null)"
+
     export DISPLAY=:0
     export XDG_RUNTIME_DIR=/run/user/${WESTON_UID}
     echo "[dorbell] Starting backend=npu as uid=${WESTON_UID} ..."
     # gosu resets HOME from /etc/passwd; override it back to /app where the
     # baked-in qnn_context/ lives and the .insightface volume is mounted.
+    # gosu initialises the target user's supplementary groups (set above).
     exec gosu "${WESTON_UID}" env HOME=/app python3 /app/doorbell.py --backend npu
 else
     echo "[dorbell] No Weston display (/tmp/.X11-unix/X0 absent); using Xvfb (web UI on :8000 still works)"

@@ -8,8 +8,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# arm64 apps; each builds from its own directory under apps/.
-APPS=(webapp-led-mcu-voice webapp-led-mcu-voice-assets)
+# arm64 apps; each builds from its own directory under apps/. The set is
+# discovered from the directories present: every apps/<name>/ with a
+# docker-compose.yml is an app. Add or remove an app by adding or removing its
+# directory — there is no list to keep in sync (here or in poll-and-build).
+APPS=()
+for d in apps/*/; do
+  [ -f "${d}docker-compose.yml" ] && APPS+=("$(basename "${d%/}")")
+done
 
 rebuild=0
 want=()

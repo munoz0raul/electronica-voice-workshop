@@ -9,9 +9,10 @@ BRANCH=main
 # Only rebuild when something under this path changes (skip OS/docs commits)
 WATCH_PATH=apps
 
-# Apps staged into every Target (the whole UNO Q app set; unchanged ones ride
-# along by their existing digest and cost no download on the device)
-APPS="webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell"
+# The app set is auto-discovered from the repo: every directory under apps/
+# with a docker-compose.yml. Add or remove an app by adding or removing its
+# apps/<name>/ directory. Uncomment below only to pin an explicit override.
+#APPS="webapp-led-mcu-voice webapp-led-mcu-voice-assets"
 
 # Target tag devices take, and the rollout group
 TAG=main

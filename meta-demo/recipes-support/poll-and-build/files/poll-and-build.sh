@@ -26,9 +26,12 @@ set -euo pipefail
 : "${IQ9_OSTREE_REPO:=${WORKDIR}/iq9-ostree_repo}"
 # Only rebuild when something under this path changes (skip OS/docs commits).
 : "${WATCH_PATH:=apps}"
-# The app set staged into each Target (the whole board, so unchanged apps ride
-# along by their existing digest and cost no download).
-: "${APPS:=webapp-led-mcu-voice webapp-led-mcu-voice-assets}"
+# The app set staged into each Target is discovered from the repo after
+# checkout: every directory under apps/ with a docker-compose.yml. Adding or
+# removing an app is just adding/removing its apps/<name>/ directory — no list
+# to maintain here, in build-apps.sh, or in /etc/default/poll-and-build. Set
+# APPS in the environment only to override that discovery.
+APPS="${APPS:-}"
 : "${TAG:=main}"
 : "${GROUP:=demo}"
 # 1: upload AND roll out to GROUP. 0: upload only (instructor fires the rollout).
@@ -74,6 +77,15 @@ fi
 last_short=${last:0:7}
 log "building for ${new:0:7} (was ${last_short:-none})"
 git checkout -q "${new}"
+
+# Discover the app set from the checked-out commit unless APPS was overridden
+# in the environment. An app is any apps/<name>/ with a docker-compose.yml.
+if [ -z "${APPS}" ]; then
+    APPS=$(for d in apps/*/; do
+        [ -f "${d}docker-compose.yml" ] && basename "${d%/}"
+    done | sort | tr '\n' ' ')
+fi
+log "app set: ${APPS}"
 
 # --- which apps changed ------------------------------------------------------
 if [ -z "${last}" ]; then

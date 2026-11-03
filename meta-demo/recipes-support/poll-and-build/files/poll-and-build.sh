@@ -28,7 +28,7 @@ set -euo pipefail
 : "${WATCH_PATH:=apps}"
 # The app set staged into each Target (the whole board, so unchanged apps ride
 # along by their existing digest and cost no download).
-: "${APPS:=webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell}"
+: "${APPS:=webapp-led-mcu-voice webapp-led-mcu-voice-assets}"
 : "${TAG:=main}"
 : "${GROUP:=demo}"
 # 1: upload AND roll out to GROUP. 0: upload only (instructor fires the rollout).
@@ -82,6 +82,14 @@ else
     mapfile -t changed < <(git diff --name-only "${last}" "${new}" -- apps/ \
         | awk -F/ 'NF>=2 {print $2}' | sort -u)
 fi
+# A removed/disabled app still appears in the diff as deleted paths; drop
+# anything no longer in the app set so build-apps.sh isn't asked to build a
+# directory that was moved out of apps/ (e.g. to apps.disable/).
+keep=()
+for c in "${changed[@]}"; do
+    case " ${APPS} " in *" ${c} "*) keep+=("${c}") ;; esac
+done
+changed=("${keep[@]}")
 [ ${#changed[@]} -gt 0 ] || changed=(${APPS})
 log "rebuilding: ${changed[*]}"
 

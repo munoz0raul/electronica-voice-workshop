@@ -76,18 +76,24 @@ if [ -S /tmp/.X11-unix/X0 ]; then
         target_user=dorbell
         useradd -u "${WESTON_UID}" -M -s /usr/sbin/nologin "${target_user}" 2>/dev/null || true
     fi
+    # NB: bare `[ ... ] && continue` and unguarded `$(pipe)` both trip
+    # set -euo pipefail, so every step below is written to never return
+    # non-zero out of a condition (if/|| true), or the script dies here and
+    # the container never reaches the gosu exec.
     for node in /dev/fastrpc-cdsp /dev/dma_heap/system $(ls /dev/video* 2>/dev/null); do
         [ -e "${node}" ] || continue
         gid=$(stat -c %g "${node}" 2>/dev/null) || continue
-        [ "${gid}" = 0 ] && continue          # root-owned node needs no group
-        gname=$(getent group "${gid}" | cut -d: -f1)
+        if [ "${gid}" = 0 ]; then
+            continue                          # root-owned node needs no group
+        fi
+        gname=$(getent group "${gid}" | cut -d: -f1 || true)
         if [ -z "${gname}" ]; then
             gname="dev_${gid}"
             groupadd -g "${gid}" "${gname}" 2>/dev/null || true
         fi
         usermod -aG "${gname}" "${target_user}" 2>/dev/null || true
     done
-    echo "[dorbell] granted ${target_user} groups: $(id -Gn "${target_user}" 2>/dev/null)"
+    echo "[dorbell] granted ${target_user} groups: $(id -Gn "${target_user}" 2>/dev/null || true)"
 
     export DISPLAY=:0
     export XDG_RUNTIME_DIR=/run/user/${WESTON_UID}

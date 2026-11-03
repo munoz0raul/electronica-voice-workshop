@@ -8,9 +8,10 @@
 #   2. Derives DOORBELL_SOC_TAG from the HTP skel version so doorbell.py
 #      _detect_soc() selects the correct context binary.
 #   3. Drops to the Weston UID (via gosu) so Weston's UID-based XWayland auth
-#      allows the cv2/Qt window to draw on the physical screen.  On boards
-#      without Weston (no /tmp/.X11-unix/X0), falls back to an Xvfb virtual
-#      framebuffer — window is invisible but the web UI on :8000 still works.
+#      allows the OpenCV highgui window to draw on the physical screen.  On
+#      boards without Weston (no /tmp/.X11-unix/X0), falls back to an Xvfb
+#      virtual framebuffer so OpenCV initialises; the view then appears nowhere.
+#      doorbell.py serves no network port — the on-screen window is the only UI.
 
 set -euo pipefail
 
@@ -52,8 +53,9 @@ export PYTHONUNBUFFERED=1
 # authorises clients by UID match (no .Xauthority cookie).  We detect the
 # socket owner and re-exec as that UID using gosu after all root setup above.
 #
-# Fallback: if Weston is not up, start an Xvfb virtual framebuffer so cv2's
-# Qt can initialise.  The doorbell window is invisible; :8000 still works.
+# Fallback: if Weston is not up, start an Xvfb virtual framebuffer so OpenCV
+# highgui can initialise.  The view is confined to that framebuffer and appears
+# nowhere; all three demo boards run Weston, so this path is unused in practice.
 if [ -S /tmp/.X11-unix/X0 ]; then
     WESTON_UID=$(stat -c %u /tmp/.X11-unix/X0 2>/dev/null || echo 1000)
     echo "[dorbell] Weston XWayland detected (socket owner uid=${WESTON_UID}); using DISPLAY=:0"
@@ -103,7 +105,7 @@ if [ -S /tmp/.X11-unix/X0 ]; then
     # gosu initialises the target user's supplementary groups (set above).
     exec gosu "${WESTON_UID}" env HOME=/app python3 /app/doorbell.py --backend npu
 else
-    echo "[dorbell] No Weston display (/tmp/.X11-unix/X0 absent); using Xvfb (web UI on :8000 still works)"
+    echo "[dorbell] No Weston display (/tmp/.X11-unix/X0 absent); using Xvfb (view appears nowhere)"
     Xvfb :1 -screen 0 1280x720x24 -nolisten tcp &
     export DISPLAY=:1
     echo "[dorbell] Starting backend=npu ..."

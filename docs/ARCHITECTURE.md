@@ -38,13 +38,20 @@ LEDs — the web UI and voice recognition work, but LED/matrix output is absent.
 
 | Device | Compose apps | Host services (from the image) |
 | --- | --- | --- |
-| VENTUNO Q | `webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets` | update-server, poll-and-build, demo-wifi AP, chrony server, mDNS |
-| UNO Q | `webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets` | demo-wifi auto-join, chrony client, `zephyr-loader` |
-| IQ-9075 EVK | `webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets` | demo-wifi auto-join, chrony client |
+| VENTUNO Q | `webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets`, `dorbell` | update-server, poll-and-build, demo-wifi AP, chrony server, mDNS |
+| UNO Q | `webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets`, `dorbell` | demo-wifi auto-join, chrony client, `zephyr-loader` |
+| IQ-9075 EVK | `webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets`, `dorbell` | demo-wifi auto-join, chrony client |
 
 Each app is a Docker Compose application delivered in a Target and run by
 aktualizr-lite. The apps are built by `build-apps.sh` and staged into
 Targets by `tools/stage-target.sh`; see [REPRODUCE.md](REPRODUCE.md).
+
+`dorbell` is a face-recognition doorbell that draws an on-screen OpenCV window
+and runs face inference on the NPU (Neural Processing Unit) through the Hexagon
+Tensor Processor. It serves no network port; the window is the whole UI. Its
+inference graph is HTP (Hexagon Tensor Processor) version specific, so the image
+carries both boards' context binaries and selects the pair at runtime from the
+board's HTP version. See [apps/dorbell/README.md](../apps/dorbell/README.md).
 
 ## The OTA flow
 

@@ -218,7 +218,34 @@ logs `Voice runner error: There are no audio devices available` in a loop when n
 mic is present, which is harmless).
 
 The fleet view at `http://<ventuno-q-ip>:8080/devices` (`admin`/`admin`) lists
-both boards with their current Targets and versions.
+all three boards with their current Targets and versions.
+
+**`dorbell`** ships in the same Targets and comes up on every board at the same
+time. It is a face-recognition doorbell with no web UI: it draws a live camera
+view on the board's **physical screen** through an OpenCV window and runs face
+inference on the NPU (Neural Processing Unit). Confirm it on the board the screen
+is attached to — plug in a camera (`/dev/video*`) and a display, and the window
+appears on boot. Keyboard keys in that window drive it (`B` toggles CPU/NPU, `G`
+enrolls the current face as a guest, `C` clears, `Q` quits). It binds no network
+port, so there is nothing to tunnel. Confirm the NPU path from the container log:
+
+```sh
+ssh root@<ventuno-q-ip> 'docker logs $(docker ps -q -f name=dorbell) 2>&1 | grep -E "DSP|NPU"'
+```
+
+Expect the board's own SoC (System on Chip) tag — `HTP v75, SoC=qcs8275` on the
+VENTUNO Q, `HTP v73, SoC=qcs9075` on the IQ-9075 EVK — then `in-process HTP
+engine ready` and the matching `*_<tag>.bin` context pair. The image carries both
+boards' binaries and `start.sh` selects the pair from the board's HTP (Hexagon
+Tensor Processor) version; see [apps/dorbell/README.md](../apps/dorbell/README.md).
+
+The NPU path needs nothing staged beyond the image. The `B`-key CPU fallback is
+the one exception: it reads the InsightFace `buffalo_sc` ONNX (Open Neural Network
+Exchange) models from `/root/.insightface` on the board, which the compose file
+mounts read-only. They are left out of the image, so the CPU backend is available
+only on a board where they were pre-staged (copy the directory from another board,
+or let the app download them once on a board with internet). The NPU backend is
+unaffected when they are absent.
 
 ## 6. The workshop loop: retrain the model and watch the new version land
 
@@ -252,7 +279,7 @@ git add apps/ && git commit -m "retrain: new keyword model" && git push
 **4. The VENTUNO Q ships it itself.** Within ~2 min `poll-and-build`:
 
 1. rebuilds the changed app image on the board,
-2. stages a UNO Q Target (`voice-<sha>`), a VENTUNO Q Target (`voice-<sha>-ventuno`), and — if `iq9-ostree_repo` is provisioned — an IQ-9075 EVK Target (`voice-<sha>-iq9`), each with its own OS `ostree_repo` + both apps,
+2. stages a UNO Q Target (`voice-<sha>`), a VENTUNO Q Target (`voice-<sha>-ventuno`), and — if `iq9-ostree_repo` is provisioned — an IQ-9075 EVK Target (`voice-<sha>-iq9`), each with its own OS `ostree_repo` plus all three apps (`webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets`, `dorbell`),
 3. uploads all of them to the `:8080` server, and
 4. rolls out each to group `demo` (each device applies only the target matching its hardware-id).
 
@@ -332,6 +359,41 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
   fiocli updates upload main "voice-${SHA}-iq9" ./targets/iq-9075-evk/
   fiocli updates create-rollout "voice-${SHA}-iq9" "auto-${SHA}-iq9" --groups demo
   ```
+- **One board logs `No Target found for the device; hw ID: <board>` and stays on
+  its old Target after a push (group-rollout last-wins).** `poll-and-build` rolls
+  out three single-hardware Targets (`voice-<sha>`, `-ventuno`, `-iq9`) to the one
+  `demo` group in sequence, and the device-gateway points every device at the
+  **most recent** rollout — the `-iq9` one, uploaded last. A device applies only
+  the Target whose hardware-id matches it, so the UNO Q and VENTUNO Q find no
+  matching Target in the one they were handed and hold their current Target. The
+  fix is a per-device rollout that bypasses the group: find each stranded board's
+  UUID in the `:8080` **Devices** list (or `fiocli devices list`) and re-point it
+  at its own Target:
+  ```sh
+  ssh root@<ventuno-q-ip>
+  fiocli updates create-rollout voice-<sha>-ventuno fix-ventuno-<sha> --uuids <ventuno-uuid>
+  fiocli updates create-rollout voice-<sha>         fix-uno-q-<sha>   --uuids <uno-q-uuid>
+  ```
+  At its next check-in the board picks up its matching Target. (The IQ9, having
+  received the last group rollout, already has its correct Target.)
+- **`No Target found …` *after deleting Targets* in the `:8080` UI, with
+  `aktualizr-lite` logging `TUF metadata check failure: Rollback attempt`.** The
+  server generates each device's `targets.json` per tag, versioned to the latest
+  matching Target's ordinal + 1. Deleting Targets in the UI makes that version go
+  **backwards**; a device that already trusted a higher version rejects every
+  fetch as a rollback, falls back to its stale local metadata, and finds no
+  current Target in it. The update, image and rollout are all fine — only the TUF
+  (The Update Framework) version regressed. Recover the stranded device by
+  clearing its cached snapshot/targets/timestamp rows (keeping `root`, the trust
+  anchor) so it re-bootstraps and accepts the server's current version:
+  ```sh
+  ssh -J root@<ventuno-q-ip> root@<device-ip>
+  systemctl stop aktualizr-lite
+  python3 -c "import sqlite3;d=sqlite3.connect('/var/sota/sql.db');d.execute('delete from meta where repo=0 and meta_type in (1,2,3)');d.commit()"
+  systemctl start aktualizr-lite
+  ```
+  To avoid it: prune only low-ordinal Targets, keeping every one at or above what
+  devices have installed; retire a Target by uploading a newer one that supersedes it.
 
 ## 8. Reset between runs
 
@@ -357,24 +419,25 @@ builder, `composectl` (for `stage-app.py`), Python 3 + PyYAML, and `fiocli`
 
 # UNO Q
 tools/stage-target.sh uno-q build/saved/uno-q-0/ostree_repo \
-    webapp-led-mcu-voice webapp-led-mcu-voice-assets
+    webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell
 fiocli updates upload main voice-1-uno-q ./targets/uno-q/
 fiocli updates create-rollout voice-1-uno-q retrain-uno-q-1 --groups demo
 
 # VENTUNO Q
 tools/stage-target.sh ventuno-q build/saved/ventuno-q-0/ostree_repo \
-    webapp-led-mcu-voice webapp-led-mcu-voice-assets
+    webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell
 fiocli updates upload main voice-1-ventuno ./targets/ventuno-q/
 fiocli updates create-rollout voice-1-ventuno retrain-ventuno-1 --groups demo
 
 # IQ-9075 EVK
 tools/stage-target.sh iq-9075-evk build/saved/iq9-0/ostree_repo \
-    webapp-led-mcu-voice webapp-led-mcu-voice-assets
+    webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell
 fiocli updates upload main voice-1-iq9 ./targets/iq-9075-evk/
 fiocli updates create-rollout voice-1-iq9 retrain-iq9-1 --groups demo
 ```
 
 `create-rollout` takes two positionals: the uploaded Target and a name for the
-rollout. Send it to one board instead of the group with `--uuids <device-uuid>`.
-The staged `ostree_repo` must match the flashed OS exactly for the update to be
-app-only (no reboot).
+rollout. Send it to one board instead of the group with `--uuids <device-uuid>`
+— which is also how you recover a board stranded by the group-rollout last-wins
+race (section 7). The staged `ostree_repo` must match the flashed OS exactly for
+the update to be app-only (no reboot).

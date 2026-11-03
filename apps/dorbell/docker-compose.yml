@@ -2,7 +2,8 @@ services:
   dorbell:
     image: demo-server.local/dorbell:latest
     restart: unless-stopped
-    # Host network: web UI reachable at <board-ip>:8000.
+    # Host network, matching the other demo apps. dorbell binds no port of its
+    # own (the UI is the on-screen OpenCV window); this is only for parity.
     network_mode: host
     # privileged: needed so start.sh can symlink /usr/lib/dsp/cdsp to the
     # board-specific DSP dir, and so all device nodes (/dev/fastrpc-cdsp,

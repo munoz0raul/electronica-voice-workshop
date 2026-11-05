@@ -28,6 +28,7 @@ published as release assets under
 | --- | --- | --- | --- |
 | UNO Q flash image | The OS flashed on the UNO Q (QRB2210 eMMC), with `snd-usb-audio` baked in | [`uno-q-flash-image.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-flash-image.tar.gz) | 431M |
 | VENTUNO Q flash image | The OS flashed on the VENTUNO Q (eMMC + SAIL SPI-NOR), update-server + demo Wi-Fi | [`ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz) | 851M |
+| VENTUNO Q `ostree_repo` | The VENTUNO Q OS half, commit `c7734d25`. `poll-and-build` copies it into every VENTUNO Q Target so updates are **app-only** (no reboot). Must match the flashed VENTUNO Q OS exactly | [`ventuno-q-ostree_repo-c7734d25.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/ventuno-q-ostree_repo-c7734d25.tgz) | 591M |
 | UNO Q `ostree_repo` | The UNO Q OS half, commit `bf492801`. `poll-and-build` copies it into every Target so updates are **app-only** (no reboot). Must match the flashed UNO Q OS exactly | [`uno-q-ostree_repo-bf492801.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-ostree_repo-bf492801.tgz) | 291M |
 | IQ-9075 EVK flash image | The OS flashed on the IQ-9075 EVK (UFS), Weston desktop with `snd-usb-audio` baked in | [`iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz) | 832M |
 | IQ-9075 EVK `ostree_repo` | The IQ-9075 EVK OS half, commit `452aa48b`. `poll-and-build` copies it into every IQ9 Target so updates are **app-only** (no reboot). Must match the flashed IQ9 OS exactly | [`iq9-ostree_repo-452aa48b.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/iq9-ostree_repo-452aa48b.tgz) | 578M |
@@ -156,14 +157,19 @@ The `mkdir` is required: `fiocli` does not create the directory itself and
 fails with `open /root/.config/fiocli.yaml: no such file or directory` if it
 is missing. `poll-and-build` reads the token at upload time.
 
-Download and extract the UNO Q and IQ-9075 EVK ostree repos directly on the
-VENTUNO Q (it has internet at this point):
+Download and extract all three boards' ostree repos directly on the
+VENTUNO Q (it has internet at this point). Every board is provisioned the same
+way — one `curl` from the release, no on-box derivation:
 
 ```sh
 ssh root@<ventuno-q-ip>
 cd /var/lib/poll-and-build
 
 BASE=https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01
+
+curl -L -o ventuno-q-ostree_repo-c7734d25.tgz "$BASE/ventuno-q-ostree_repo-c7734d25.tgz"
+mkdir ventuno-q-ostree_repo
+tar xzf ventuno-q-ostree_repo-c7734d25.tgz -C ventuno-q-ostree_repo --strip-components=1
 
 curl -L -o uno-q-ostree_repo-bf492801.tgz  "$BASE/uno-q-ostree_repo-bf492801.tgz"
 mkdir uno-q-ostree_repo
@@ -183,9 +189,12 @@ tar xzf iq9-ostree_repo-452aa48b.tgz -C iq9-ostree_repo --strip-components=1
 > systemctl start chronyd
 > ```
 
-The VENTUNO Q's own `ostree_repo` must be derived from the running system —
-there is no release download for it because its OS commit is only knowable
-from the booted board. Run these once (still on the VENTUNO Q):
+**Fallback — only if you flashed a VENTUNO Q image that is not this release's
+`c7734d25`.** The VENTUNO Q's OS commit is a build artifact like the other two,
+so the release download above is the normal path. But if your running OS does
+not match `c7734d25` (you rebuilt it), derive the repo from the booted board
+instead of downloading — a mismatched `ostree_repo` turns the first app update
+into an OS update and forces a reboot:
 
 ```sh
 cd /var/lib/poll-and-build

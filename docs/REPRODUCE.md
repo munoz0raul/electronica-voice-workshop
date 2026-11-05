@@ -126,28 +126,42 @@ fiocli login demo http://localhost:8080          # approve at :8080 (admin/admin
 #   /var/lib/poll-and-build/uno-q-ostree_repo
 ```
 
-Transfer `uno-q-ostree_repo-b637abb7.tgz` to the VENTUNO Q and extract it to
-`/var/lib/poll-and-build/uno-q-ostree_repo` (the directory must contain
-`refs/`, `objects/`, … directly).
+Download and extract the UNO Q and IQ-9075 EVK ostree repos directly on the
+VENTUNO Q (it has internet at this point):
+
+```sh
+ssh root@<ventuno-q-ip>
+cd /var/lib/poll-and-build
+
+BASE=https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01
+
+curl -L -o uno-q-ostree_repo-b637abb7.tgz  "$BASE/uno-q-ostree_repo-b637abb7.tgz"
+tar xzf uno-q-ostree_repo-b637abb7.tgz
+mv uno-q-ostree_repo-b637abb7 uno-q-ostree_repo
+
+curl -L -o iq9-ostree_repo-452aa48b.tgz "$BASE/iq9-ostree_repo-452aa48b.tgz"
+tar xzf iq9-ostree_repo-452aa48b.tgz
+mv iq9-ostree_repo-452aa48b iq9-ostree_repo
+```
+
+> **Clock note:** `chrony-boot-sync.service` sets the clock from `pool.ntp.org`
+> once at boot. If the board had no internet at boot the clock will be wrong and
+> `curl` will fail with an SSL certificate error. Fix it before downloading:
+> ```sh
+> systemctl stop chronyd
+> chronyd -q -t 30 "pool pool.ntp.org iburst"
+> systemctl start chronyd
+> ```
 
 The VENTUNO Q's own `ostree_repo` is derived from the running system — no
 download artifact needed. Run these once after the first boot:
 
 ```sh
-ssh root@<ventuno-q-ip>
 cd /var/lib/poll-and-build
 ostree --repo=ventuno-q-ostree_repo init --mode=archive
 commit=$(ostree --repo=/ostree/repo rev-parse ostree/1/1/0)
 ostree --repo=ventuno-q-ostree_repo pull-local /ostree/repo "$commit"
 ostree --repo=ventuno-q-ostree_repo refs --create=ventuno-q "$commit"
-```
-
-The IQ-9075 EVK's `ostree_repo` can be downloaded from the release (it matches
-the IQ9 flash image above) and transferred directly to the VENTUNO Q:
-
-```sh
-scp iq9-ostree_repo-452aa48b.tgz root@<ventuno-q-ip>:/var/lib/poll-and-build/
-ssh root@<ventuno-q-ip> 'cd /var/lib/poll-and-build && tar xzf iq9-ostree_repo-452aa48b.tgz && mv iq9-ostree_repo-452aa48b iq9-ostree_repo'
 ```
 
 Alternatively, if you rebuilt the IQ9 OS image, derive it from the booted IQ9:

@@ -120,11 +120,14 @@ for the full list):
 
 ```sh
 ssh root@<ventuno-q-ip>
-mkdir -p /root/.config
-fiocli login demo http://localhost:8080          # approve at :8080 (admin/admin)
-# drop the UNO Q ostree_repo in place (matches the flashed UNO Q OS):
-#   /var/lib/poll-and-build/uno-q-ostree_repo
+fiocli login demo http://localhost:8080
 ```
+
+A browser tab opens at `http://<ventuno-q-ip>:8080/auth/activate` — log in as
+`admin`/`admin` and approve. `fiocli` writes its token to
+`/root/.config/fiocli.yaml` (which lives on the persistent `/var/roothome`).
+`poll-and-build` reads it at upload time; without it the service fails with
+`open /root/.config/fiocli.yaml: no such file or directory`.
 
 Download and extract the UNO Q and IQ-9075 EVK ostree repos directly on the
 VENTUNO Q (it has internet at this point):

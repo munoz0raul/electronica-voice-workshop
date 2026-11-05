@@ -136,12 +136,12 @@ cd /var/lib/poll-and-build
 BASE=https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01
 
 curl -L -o uno-q-ostree_repo-b637abb7.tgz  "$BASE/uno-q-ostree_repo-b637abb7.tgz"
-tar xzf uno-q-ostree_repo-b637abb7.tgz
-mv uno-q-ostree_repo-b637abb7 uno-q-ostree_repo
+mkdir uno-q-ostree_repo
+tar xzf uno-q-ostree_repo-b637abb7.tgz -C uno-q-ostree_repo --strip-components=1
 
 curl -L -o iq9-ostree_repo-452aa48b.tgz "$BASE/iq9-ostree_repo-452aa48b.tgz"
-tar xzf iq9-ostree_repo-452aa48b.tgz
-mv iq9-ostree_repo-452aa48b iq9-ostree_repo
+mkdir iq9-ostree_repo
+tar xzf iq9-ostree_repo-452aa48b.tgz -C iq9-ostree_repo --strip-components=1
 ```
 
 > **Clock note:** `chrony-boot-sync.service` sets the clock from `pool.ntp.org`

@@ -14,6 +14,7 @@ SRC_URI = " \
     file://poll-and-build.service \
     file://poll-and-build.timer \
     file://poll-and-build.default \
+    file://poll-and-build-home.conf \
 "
 S = "${UNPACKDIR}"
 
@@ -52,6 +53,9 @@ do_install() {
         ${UNPACKDIR}/poll-and-build.service > ${D}${systemd_system_unitdir}/poll-and-build.service
     sed -e 's|@INTERVAL@|${POLL_INTERVAL}|g' \
         ${UNPACKDIR}/poll-and-build.timer > ${D}${systemd_system_unitdir}/poll-and-build.timer
+
+    install -D -m 0644 ${UNPACKDIR}/poll-and-build-home.conf \
+        ${D}${nonarch_libdir}/tmpfiles.d/poll-and-build-home.conf
 }
 
 FILES:${PN} = " \
@@ -59,6 +63,7 @@ FILES:${PN} = " \
     ${sysconfdir}/default/poll-and-build \
     ${systemd_system_unitdir}/poll-and-build.service \
     ${systemd_system_unitdir}/poll-and-build.timer \
+    ${nonarch_libdir}/tmpfiles.d/poll-and-build-home.conf \
 "
 
 # Keep device edits to the config across OS updates.

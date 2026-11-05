@@ -83,14 +83,39 @@ qdl --storage ufs prog_firehose_ddr.elf rawprogram*.xml patch*.xml
 Boot all boards. Log in as `root` / `oelinux123`. The VENTUNO Q comes up as the
 update-server (`:8080`) and the demo Wi-Fi AP.
 
-Find the IPs: the VENTUNO Q's LAN address `<ventuno-q-ip>` from your DHCP leases
-(ours is `192.168.15.99`); the UNO Q's `<uno-q-ip>` and the IQ-9075 EVK's `<iq9-ip>`
-from the VENTUNO's own leases — all three use the demo Wi-Fi (ours: UNO Q `10.42.0.211`,
-IQ9 `10.42.0.145`):
+Find the IPs in two hops — the VENTUNO Q from your laptop, then the Wi-Fi clients
+from the VENTUNO Q.
+
+**The VENTUNO Q `<ventuno-q-ip>`, from your Mac.** If you share the laptop's
+internet to the board (macOS Internet Sharing), it shows up on `bridge100`; the
+non-`permanent` entry on that interface is the board. On an office LAN instead it's
+the board's DHCP lease (ours was `192.168.15.99`).
 
 ```sh
-ssh root@<ventuno-q-ip> cat /var/lib/demo-wifi/dhcp.leases   # UNO Q and IQ9 (Wi-Fi)
+arp -a | grep bridge100
+# ? (192.168.2.1) at b6:59:76:8e:54:64 on bridge100 ifscope permanent [bridge]  # your Mac
+# ? (192.168.2.2) at 56:80:b:7f:6c:ff on bridge100 ifscope [bridge]             # VENTUNO Q
 ```
+
+So `<ventuno-q-ip>` is `192.168.2.2` here. (The rest of this doc writes the
+VENTUNO Q as `192.168.15.99` in its "ours:" examples — substitute whatever you found.)
+
+**The UNO Q(s) `<uno-q-ip>` and IQ-9075 EVK `<iq9-ip>`, from the VENTUNO Q.** They
+join its demo Wi-Fi (`10.42.0.0/24`). SSH in and list the neighbours on the AP
+interface — `ip neigh` catches every associated client, where the lease file can
+miss one that renewed before it was rewritten:
+
+```sh
+ssh root@<ventuno-q-ip>
+ip neigh show dev wlp3s0
+# 10.42.0.145 lladdr 4c:23:38:02:1c:4f REACHABLE   # iq-9075-evk-2170088815
+# 10.42.0.211 lladdr 14:b5:cd:e8:6d:53 REACHABLE   # uno-q-1198272625
+# 10.42.0.157 lladdr 14:b5:cd:e8:5c:d9 REACHABLE   # uno-q-527546235 (a second UNO Q)
+cat /var/lib/demo-wifi/dhcp.leases                 # same IPs, mapped to hostnames
+```
+
+Map each IP to a board by hostname — from the lease file, or `ssh root@<ip> hostname`.
+From the VENTUNO Q you then reach each board directly, e.g. `ssh root@10.42.0.211`.
 
 ## 2. Register all boards
 

@@ -5,8 +5,8 @@
 # repo over the Ethernet uplink, and when anything under apps/ has changed since
 # the last build it rebuilds the changed app image(s), stages a Target for each
 # board (UNO Q + VENTUNO Q, both apps), uploads them to the local update-server,
-# and optionally creates a rollout to the demo group. Both boards' aktualizr-lite
-# agents pull only the changed OCI blobs (a model swap is ~14 MB).
+# and optionally rolls each Target out to its own boards by UUID. Both boards'
+# aktualizr-lite agents pull only the changed OCI blobs (a model swap is ~14 MB).
 #
 # Config is in /etc/default/poll-and-build (EnvironmentFile). Nothing here is
 # secret: the private-repo credential (deploy key or token) and the fiocli
@@ -33,8 +33,8 @@ set -euo pipefail
 # APPS in the environment only to override that discovery.
 APPS="${APPS:-}"
 : "${TAG:=main}"
-: "${GROUP:=demo}"
-# 1: upload AND roll out to GROUP. 0: upload only (instructor fires the rollout).
+# 1: upload AND roll out each Target to its own boards. 0: upload only
+# (instructor fires the rollout).
 : "${AUTO_ROLLOUT:=1}"
 # buildx builder build-apps.sh uses; native arm64, so the container driver needs
 # no QEMU. Created on first run if absent.
@@ -138,15 +138,48 @@ upload_target() {
 }
 
 create_rollout() {
-    local tname=$1 rname=$2 group=$3
+    local uname=$1 rname=$2 uuids=$3
     local out
-    out=$(fiocli updates create-rollout "$tname" "$rname" --groups "$group" 2>&1) && return 0
+    out=$(fiocli updates create-rollout "$uname" "$rname" --uuids "$uuids" 2>&1) && return 0
     if echo "$out" | grep -q "already exists"; then
         log "rollout $rname already exists; skipping"
         return 0
     fi
     echo "$out" >&2
     return 1
+}
+
+# UUIDs of every registered device whose hardware matches $1 (a machine name:
+# uno-q / ventuno-q / iq-9075-evk). The device name label is set from the board
+# hostname (<machine>-<id>) at registration, so a "<machine>-" name prefix is a
+# reliable hardware-id signal -- the server offers no per-device hardware-id
+# query. Pages through the whole device list, so it scales past one page.
+devices_for_machine() {
+    local machine=$1 page=1 raw
+    while :; do
+        raw=$(fiocli devices list --columns uuid,name -p "$page" 2>/dev/null \
+            | awk 'NR>1 {print $1"\t"$2}')
+        [ -n "$raw" ] || break    # a page with no device rows = past the end
+        echo "$raw" | awk -v m="${machine}-" 'index($2, m)==1 {print $1}'
+        page=$((page+1))
+    done | tr '\n' ',' | sed 's/,$//'
+}
+
+# Roll an update out to exactly the devices of its hardware type, by UUID. This
+# is what keeps three single-hardware Targets from fighting over one group: a
+# group rollout re-points *every* device in the group at its Target, so three
+# rollouts to one group leave every board on the last one (the UNO Q then finds
+# no matching Target). Scoping each rollout to its own boards' UUIDs removes the
+# race -- and the count stays at three rollouts no matter how many devices.
+rollout_machine() {
+    local uname=$1 rname=$2 machine=$3 uuids
+    uuids=$(devices_for_machine "$machine")
+    if [ -z "$uuids" ]; then
+        log "no ${machine} devices registered; skipping rollout of ${uname}"
+        return 0
+    fi
+    log "rolling out ${uname} to ${machine} devices: ${uuids}"
+    create_rollout "$uname" "$rname" "$uuids"
 }
 
 name="voice-${new:0:7}"
@@ -157,10 +190,9 @@ upload_target "${TAG}" "${name}" ./targets/uno-q/
 
 if [ -d "${VENTUNO_OSTREE_REPO}" ]; then
     # The update server requires a unique name per tag, so VENTUNO Q gets its
-    # own update name with a "-ventuno" suffix.  Its rollout targets the same
-    # group; aktualizr-lite on each device applies only the target matching
-    # its hardware-id, so UNO Q and VENTUNO Q see different OS commits even
-    # though both updates roll out to the same group.
+    # own update name with a "-ventuno" suffix. rollout_machine (below) sends it
+    # only to the VENTUNO Q boards by UUID, so it never competes with the UNO Q
+    # or IQ-9075 rollout the way a shared-group rollout would.
     vname="${name}-ventuno"
     log "staging VENTUNO Q target"
     tools/stage-target.sh ventuno-q "${VENTUNO_OSTREE_REPO}" ${APPS}
@@ -185,16 +217,9 @@ else
 fi
 
 if [ "${AUTO_ROLLOUT}" = "1" ]; then
-    log "rolling out ${name} to group ${GROUP}"
-    create_rollout "${name}" "auto-${new:0:7}" "${GROUP}"
-    if [ -n "${vname}" ]; then
-        log "rolling out ${vname} to group ${GROUP}"
-        create_rollout "${vname}" "auto-${new:0:7}-ventuno" "${GROUP}"
-    fi
-    if [ -n "${iname}" ]; then
-        log "rolling out ${iname} to group ${GROUP}"
-        create_rollout "${iname}" "auto-${new:0:7}-iq9" "${GROUP}"
-    fi
+    rollout_machine "${name}" "auto-${new:0:7}" uno-q
+    [ -n "${vname}" ] && rollout_machine "${vname}" "auto-${new:0:7}-ventuno" ventuno-q
+    [ -n "${iname}" ] && rollout_machine "${iname}" "auto-${new:0:7}-iq9" iq-9075-evk
 fi
 
 echo "${new}" > "${STATE}"

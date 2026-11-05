@@ -301,7 +301,7 @@ git add apps/ && git commit -m "retrain: new keyword model" && git push
 1. rebuilds the changed app image on the board,
 2. stages a UNO Q Target (`voice-<sha>`), a VENTUNO Q Target (`voice-<sha>-ventuno`), and — if `iq9-ostree_repo` is provisioned — an IQ-9075 EVK Target (`voice-<sha>-iq9`), each with its own OS `ostree_repo` plus all three apps (`webapp-led-mcu-voice`, `webapp-led-mcu-voice-assets`, `dorbell`),
 3. uploads all of them to the `:8080` server, and
-4. rolls out each to group `demo` (each device applies only the target matching its hardware-id).
+4. rolls each Target out **only to the boards of its own hardware type, by UUID** — the loop lists the devices, buckets them by the `<machine>-` prefix of their name, and rolls each Target to just that bucket. A Target never lands on a board it doesn't match, so there is no shared-group last-wins race (see section 7).
 
 Watch it:
 
@@ -309,7 +309,7 @@ Watch it:
 ssh root@<ventuno-q-ip> 'journalctl -u poll-and-build.service -f'
 ```
 
-Expect it to finish with `rolling out … to group demo` and `done`.
+Expect it to finish with `rolling out … to <machine> devices: <uuids>` for each board type and `done`.
 
 **5. Watch the new version land.** The UNO Q's aktualizr-lite picks up the
 rollout at its next check (polling is ~5 s), pulls only the changed OCI blobs (a
@@ -380,22 +380,25 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
   fiocli updates create-rollout "voice-${SHA}-iq9" "auto-${SHA}-iq9" --groups demo
   ```
 - **One board logs `No Target found for the device; hw ID: <board>` and stays on
-  its old Target after a push (group-rollout last-wins).** `poll-and-build` rolls
-  out three single-hardware Targets (`voice-<sha>`, `-ventuno`, `-iq9`) to the one
-  `demo` group in sequence, and the device-gateway points every device at the
-  **most recent** rollout — the `-iq9` one, uploaded last. A device applies only
-  the Target whose hardware-id matches it, so the UNO Q and VENTUNO Q find no
-  matching Target in the one they were handed and hold their current Target. The
-  fix is a per-device rollout that bypasses the group: find each stranded board's
-  UUID in the `:8080` **Devices** list (or `fiocli devices list`) and re-point it
-  at its own Target:
+  its old Target after a push.** This is the shared-group last-wins trap. There
+  are three single-hardware Targets (`voice-<sha>`, `-ventuno`, `-iq9`); if all
+  three are rolled out to the one `demo` group in sequence, the device-gateway
+  points **every** device at the **most recent** rollout (the `-iq9` one, uploaded
+  last). A device applies only the Target whose hardware-id matches it, so the
+  UNO Q and VENTUNO Q find no matching Target in the one they were handed and hold
+  their current Target. `poll-and-build` no longer does this — it rolls each
+  Target out only to the UUIDs of its own hardware type (see step 4 of the
+  workshop loop), so the race cannot occur from the loop. You can still trip it by
+  rolling out with `--groups demo` by hand. The fix either way is a per-hardware
+  rollout by UUID: find each stranded board's UUID in the `:8080` **Devices** list
+  (or `fiocli devices list`) and re-point it at its own Target:
   ```sh
   ssh root@<ventuno-q-ip>
   fiocli updates create-rollout voice-<sha>-ventuno fix-ventuno-<sha> --uuids <ventuno-uuid>
   fiocli updates create-rollout voice-<sha>         fix-uno-q-<sha>   --uuids <uno-q-uuid>
+  fiocli updates create-rollout voice-<sha>-iq9     fix-iq9-<sha>     --uuids <iq9-uuid>
   ```
-  At its next check-in the board picks up its matching Target. (The IQ9, having
-  received the last group rollout, already has its correct Target.)
+  At its next check-in each board picks up its matching Target.
 - **`No Target found …` *after deleting Targets* in the `:8080` UI, with
   `aktualizr-lite` logging `TUF metadata check failure: Rollback attempt`.** The
   server generates each device's `targets.json` per tag, versioned to the latest
@@ -434,30 +437,36 @@ tooling the automated path does not: Docker with a `docker-container` buildx
 builder, `composectl` (for `stage-app.py`), Python 3 + PyYAML, and `fiocli`
 (matching the server), with each board's `ostree_repo` under `build/saved/`.
 
+Get each board's UUID first (`fiocli devices list`), then roll each Target out
+**to its own board's UUID** — never `--groups demo` for more than one hardware
+type, or you hit the last-wins trap in section 7.
+
 ```sh
 ./build-apps.sh webapp-led-mcu-voice-assets                 # rebuild the changed app
+fiocli devices list                                         # note each board's UUID
 
 # UNO Q
 tools/stage-target.sh uno-q build/saved/uno-q-0/ostree_repo \
     webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell
 fiocli updates upload main voice-1-uno-q ./targets/uno-q/
-fiocli updates create-rollout voice-1-uno-q retrain-uno-q-1 --groups demo
+fiocli updates create-rollout voice-1-uno-q retrain-uno-q-1 --uuids <uno-q-uuid>
 
 # VENTUNO Q
 tools/stage-target.sh ventuno-q build/saved/ventuno-q-0/ostree_repo \
     webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell
 fiocli updates upload main voice-1-ventuno ./targets/ventuno-q/
-fiocli updates create-rollout voice-1-ventuno retrain-ventuno-1 --groups demo
+fiocli updates create-rollout voice-1-ventuno retrain-ventuno-1 --uuids <ventuno-q-uuid>
 
 # IQ-9075 EVK
 tools/stage-target.sh iq-9075-evk build/saved/iq9-0/ostree_repo \
     webapp-led-mcu-voice webapp-led-mcu-voice-assets dorbell
 fiocli updates upload main voice-1-iq9 ./targets/iq-9075-evk/
-fiocli updates create-rollout voice-1-iq9 retrain-iq9-1 --groups demo
+fiocli updates create-rollout voice-1-iq9 retrain-iq9-1 --uuids <iq9-uuid>
 ```
 
 `create-rollout` takes two positionals: the uploaded Target and a name for the
-rollout. Send it to one board instead of the group with `--uuids <device-uuid>`
-— which is also how you recover a board stranded by the group-rollout last-wins
-race (section 7). The staged `ostree_repo` must match the flashed OS exactly for
-the update to be app-only (no reboot).
+rollout. `--uuids` sends it to specific boards (comma-separated for several);
+`--groups demo` sends it to a whole group but is safe only when one hardware type
+is in that group — it is what `poll-and-build` deliberately avoids (section 7).
+The staged `ostree_repo` must match the flashed OS exactly for the update to be
+app-only (no reboot).

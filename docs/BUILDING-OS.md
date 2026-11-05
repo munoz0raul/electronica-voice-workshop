@@ -73,6 +73,69 @@ For example, to share downloads and sstate between both boards:
     --sstate-dir ~/yocto/sstate-cache
 ```
 
+## Updating the release assets after an OS rebuild
+
+After rebuilding either board's OS image, the release assets under
+[`images-2026-11-01`](https://github.com/munoz0raul/electronica-voice-workshop/releases/tag/images-2026-11-01)
+must be updated so `REPRODUCE.md`'s `curl` commands stay valid. Skip any board
+whose OS you did not change.
+
+The build output lands at:
+```
+build/work/build/tmp/deploy/images/<machine>/
+```
+
+**1. Pack the flash image and ostree_repo** (run on the build server; Linux tar
+produces no AppleDouble sidecars):
+
+```sh
+DEPLOY=build/work/build/tmp/deploy/images/<machine>
+
+# Flash bundle — already produced by the build
+FLASH=$(ls $DEPLOY/*.qcomflash.tar.gz | head -1)
+
+# ostree_repo — get the short commit for the filename
+COMMIT=$(cat $DEPLOY/ostree_repo/refs/heads/*)
+SHORT=${COMMIT:0:8}
+cd $DEPLOY
+tar -czf /tmp/ostree_repo-${SHORT}.tgz ostree_repo
+```
+
+**2. Compute SHA256 and update the release**:
+
+```sh
+# Delete the old ostree_repo asset and upload the new one
+gh release delete-asset images-2026-11-01 <old-ostree_repo-filename>.tgz --yes \
+    --repo munoz0raul/electronica-voice-workshop
+gh release upload images-2026-11-01 /tmp/ostree_repo-${SHORT}.tgz \
+    --repo munoz0raul/electronica-voice-workshop
+
+# If the flash image also changed, replace it too
+gh release delete-asset images-2026-11-01 <old-flash-image>.tar.gz --yes \
+    --repo munoz0raul/electronica-voice-workshop
+gh release upload images-2026-11-01 "$FLASH" \
+    --repo munoz0raul/electronica-voice-workshop
+```
+
+**3. Update SHA256SUMS**:
+
+```sh
+gh release download images-2026-11-01 --pattern SHA256SUMS --output /tmp/SHA256SUMS \
+    --repo munoz0raul/electronica-voice-workshop
+
+# Edit /tmp/SHA256SUMS: replace the old lines with the new hashes
+shasum -a 256 /tmp/ostree_repo-${SHORT}.tgz  # add this line
+# (and the flash image line if you replaced it)
+
+gh release delete-asset images-2026-11-01 SHA256SUMS --yes \
+    --repo munoz0raul/electronica-voice-workshop
+gh release upload images-2026-11-01 /tmp/SHA256SUMS \
+    --repo munoz0raul/electronica-voice-workshop
+```
+
+**4. Update `REPRODUCE.md`**: change the ostree_repo filename, commit hash, and
+size in the artifacts table and in the `curl` / `scp` commands in step 4.
+
 ## Layer locks
 
 `uno-q.yml` and `ventuno-q.yml` name the Qualcomm layers; a lock file in

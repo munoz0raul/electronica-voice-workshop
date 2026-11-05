@@ -153,15 +153,16 @@ tar xzf iq9-ostree_repo-452aa48b.tgz -C iq9-ostree_repo --strip-components=1
 > systemctl start chronyd
 > ```
 
-The VENTUNO Q's own `ostree_repo` is derived from the running system — no
-download artifact needed. Run these once after the first boot:
+The VENTUNO Q's own `ostree_repo` must be derived from the running system —
+there is no release download for it because its OS commit is only knowable
+from the booted board. Run these once (still on the VENTUNO Q):
 
 ```sh
 cd /var/lib/poll-and-build
 ostree --repo=ventuno-q-ostree_repo init --mode=archive
 commit=$(ostree --repo=/ostree/repo rev-parse ostree/1/1/0)
 ostree --repo=ventuno-q-ostree_repo pull-local /ostree/repo "$commit"
-ostree --repo=ventuno-q-ostree_repo refs --create=ventuno-q "$commit"
+ostree --repo=ventuno-q-ostree_repo refs --create=ventuno-q --force "$commit"
 ```
 
 Alternatively, if you rebuilt the IQ9 OS image, derive it from the booted IQ9:

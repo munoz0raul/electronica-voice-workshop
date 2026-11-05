@@ -50,86 +50,141 @@ The `ostree_repo` must be the **exact** OS on the UNO Q. If you rebuild the UNO 
 image, re-export its `ostree_repo` from the build and re-stash it, or the first
 app update looks like an OS change and forces a reboot.
 
-## 1. Flash all boards
+## 1. Flash all boards (from your Mac)
 
-Put each board in EDL and flash with `qdl` (details and EDL entry per board in
-the `qcom-flash-mac` skill / the board Quick Start Guide). Extract each tarball
-first; run from inside the image directory.
-
-**UNO Q** (eMMC):
+Flashing runs on the Mac over EDL with the prebuilt `qdl` binary
+(`~/tools/qdl/QDL_2.7_Mac_ARM64/qdl`). Clear the quarantine on the tool once, and
+keep its path in `$QDL` for the commands below:
 
 ```sh
-qdl --storage emmc prog_firehose_ddr.elf rawprogram0.xml patch0.xml
+chmod -R u+w ~/tools/qdl/QDL_2.7_Mac_ARM64/
+xattr -dr com.apple.quarantine ~/tools/qdl/QDL_2.7_Mac_ARM64/
+QDL=~/tools/qdl/QDL_2.7_Mac_ARM64/qdl
+```
+
+Download the three flash images + `SHA256SUMS`, verify, and unpack each into its
+own directory:
+
+```sh
+mkdir -p ~/qualcomm-flash && cd ~/qualcomm-flash
+BASE=https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01
+
+curl -L -O "$BASE/SHA256SUMS"
+curl -L -O "$BASE/uno-q-flash-image.tar.gz"
+curl -L -O "$BASE/ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz"
+curl -L -O "$BASE/iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz"
+
+# must print OK for all three flash images (the three ostree lines report
+# "No such file" here — those go on the VENTUNO Q in step 4, not the Mac)
+shasum -a 256 -c SHA256SUMS 2>/dev/null | grep -E 'uno-q-flash|ventuno-q-demo|iq-9075-evk-demo'
+
+mkdir -p uno ventuno iq9
+tar xzf uno-q-flash-image.tar.gz -C uno
+tar xzf ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz -C ventuno
+tar xzf iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz -C iq9
+```
+
+Each tarball unpacks into a single image subdirectory holding
+`prog_firehose_ddr.elf`, the `rawprogram*.xml` / `patch*.xml` pairs, and a
+`sail_nor/` subdir where applicable.
+
+Flash **one board at a time**: put it in EDL (Emergency Download Mode), connect
+USB-C to the Mac, and confirm the Mac sees it (expect
+`Qualcomm CDMA Technologies MSM`):
+
+```sh
+system_profiler SPUSBDataType | grep -A4 -i qualcomm
+```
+
+EDL entry is board-specific — the IQ-9075 EVK uses switch `SW2-3`; follow each
+board's Quick Start Guide for the others. Each flash ends with
+`partition 1 is now bootable`. The directory names below are exactly what the
+release tarballs extract to.
+
+**UNO Q** — eMMC, one image (no SAIL):
+
+```sh
+cd ~/qualcomm-flash/uno/core-image-full-cmdline-uno-q
+$QDL --storage emmc prog_firehose_ddr.elf rawprogram0.xml patch0.xml
 ```
 
 **VENTUNO Q** — SAIL firmware (SPI-NOR) first, then the main image (eMMC):
 
 ```sh
-cd sail_nor
-qdl --storage spinor prog_firehose_ddr.elf rawprogram0.xml patch0.xml
-cd ..
-qdl --storage emmc prog_firehose_ddr.elf rawprogram0.xml rawprogram1.xml patch0.xml patch1.xml
+cd ~/qualcomm-flash/ventuno/ventuno-q-demo-image-ventuno-q/sail_nor
+$QDL --storage spinor prog_firehose_ddr.elf rawprogram0.xml patch0.xml
+
+cd ~/qualcomm-flash/ventuno/ventuno-q-demo-image-ventuno-q
+$QDL --storage emmc prog_firehose_ddr.elf rawprogram0.xml rawprogram1.xml patch0.xml patch1.xml
 ```
 
-**IQ-9075 EVK** — EDL entry is `SW2-3` (see the Quick Start Guide). SAIL
-firmware (SPI-NOR) first, then the main image (UFS):
+**IQ-9075 EVK** — SAIL firmware (SPI-NOR) first, then the main image (UFS). The
+main image has six `rawprogram`/`patch` pairs (0–5):
 
 ```sh
-cd sail_nor
-qdl --storage spinor prog_firehose_ddr.elf rawprogram0.xml patch0.xml
-cd ..
-qdl --storage ufs prog_firehose_ddr.elf rawprogram*.xml patch*.xml
+cd ~/qualcomm-flash/iq9/iq-9075-evk-demo-image-iq-9075-evk/sail_nor
+$QDL --storage spinor prog_firehose_ddr.elf rawprogram0.xml patch0.xml
+
+cd ~/qualcomm-flash/iq9/iq-9075-evk-demo-image-iq-9075-evk
+$QDL --storage ufs prog_firehose_ddr.elf rawprogram0.xml rawprogram1.xml rawprogram2.xml rawprogram3.xml rawprogram4.xml rawprogram5.xml patch0.xml patch1.xml patch2.xml patch3.xml patch4.xml patch5.xml
 ```
 
-Boot all boards. Log in as `root` / `oelinux123`. The VENTUNO Q comes up as the
+After each flash, power the board off, return its EDL switch to normal boot, and
+power on. Log in as `root` / `oelinux123`. The VENTUNO Q comes up as the
 update-server (`:8080`) and the demo Wi-Fi AP.
 
-Find the IPs in two hops — the VENTUNO Q from your laptop, then the Wi-Fi clients
-from the VENTUNO Q.
+Find the IPs in two hops — the VENTUNO Q from your Mac, then the Wi-Fi clients
+from the VENTUNO Q. Throughout the rest of this doc, **`VENTUNO`, `UNOQ`, and
+`IQ9`** stand for the three boards' IP addresses you find here — substitute the
+real IPs when you run the commands.
 
-**The VENTUNO Q `<ventuno-q-ip>`, from your Mac.** If you share the laptop's
-internet to the board (macOS Internet Sharing), it shows up on `bridge100`; the
-non-`permanent` entry on that interface is the board. On an office LAN instead it's
-the board's DHCP lease (ours was `192.168.15.99`).
+**VENTUNO Q, from your Mac.** With macOS Internet Sharing the board shows up on
+`bridge100` — the non-`permanent` entry on that interface is the board. On an
+office LAN it's the board's DHCP lease instead.
 
 ```sh
 arp -a | grep bridge100
 # ? (192.168.2.1) at b6:59:76:8e:54:64 on bridge100 ifscope permanent [bridge]  # your Mac
-# ? (192.168.2.2) at 56:80:b:7f:6c:ff on bridge100 ifscope [bridge]             # VENTUNO Q
+# ? (192.168.2.2) at 56:80:b:7f:6c:ff on bridge100 ifscope [bridge]             # VENTUNO Q → this is VENTUNO
 ```
 
-So `<ventuno-q-ip>` is `192.168.2.2` here. (The rest of this doc writes the
-VENTUNO Q as `192.168.15.99` in its "ours:" examples — substitute whatever you found.)
-
-**The UNO Q(s) `<uno-q-ip>` and IQ-9075 EVK `<iq9-ip>`, from the VENTUNO Q.** They
-join its demo Wi-Fi (`10.42.0.0/24`). SSH in and list the neighbours on the AP
-interface — `ip neigh` catches every associated client, where the lease file can
-miss one that renewed before it was rewritten:
+**UNO Q and IQ-9075 EVK, from the VENTUNO Q.** They auto-join its demo Wi-Fi
+(`10.42.0.0/24`). SSH in and list the clients on the AP interface — `ip neigh`
+catches every associated client, where the lease file can miss one that renewed
+before it was rewritten:
 
 ```sh
-ssh root@<ventuno-q-ip>
+ssh root@VENTUNO
 ip neigh show dev wlp3s0
-# 10.42.0.145 lladdr 4c:23:38:02:1c:4f REACHABLE   # iq-9075-evk-2170088815
-# 10.42.0.211 lladdr 14:b5:cd:e8:6d:53 REACHABLE   # uno-q-1198272625
-# 10.42.0.157 lladdr 14:b5:cd:e8:5c:d9 REACHABLE   # uno-q-527546235 (a second UNO Q)
+# 10.42.0.145 lladdr 4c:23:38:02:1c:4f REACHABLE   # iq-9075-evk-2170088815  → IQ9
+# 10.42.0.211 lladdr 14:b5:cd:e8:6d:53 REACHABLE   # uno-q-1198272625        → UNOQ
 cat /var/lib/demo-wifi/dhcp.leases                 # same IPs, mapped to hostnames
+exit
 ```
 
 Map each IP to a board by hostname — from the lease file, or `ssh root@<ip> hostname`.
-From the VENTUNO Q you then reach each board directly, e.g. `ssh root@10.42.0.211`.
 
 ## 2. Register all boards
 
-Each board signs in with a code you approve in the browser at
-`http://<ventuno-q-ip>:8080/auth/activate` (`admin`/`admin`):
+Open `http://VENTUNO:8080/auth/activate` (`admin`/`admin`) in a browser. Each
+`fio-device-register` below prints a code to approve there. Register the VENTUNO Q
+from the board itself, and the other two by hopping through it:
 
 ```sh
-ssh -t root@<ventuno-q-ip> 'fio-device-register -n "$(hostname)"'
-ssh -t -J root@<ventuno-q-ip> root@<uno-q-ip> 'fio-device-register -n "$(hostname)"'
-ssh -t -J root@<ventuno-q-ip> root@<iq9-ip> 'fio-device-register -n "$(hostname)"'
+ssh root@VENTUNO
+fio-device-register -n "$(hostname)"
+exit
+
+ssh -J root@VENTUNO root@UNOQ
+fio-device-register -n "$(hostname)"
+exit
+
+ssh -J root@VENTUNO root@IQ9
+fio-device-register -n "$(hostname)"
+exit
 ```
 
-All three appear in **Devices** at `http://<ventuno-q-ip>:8080`, tagged `main`.
+All three appear in **Devices** at `http://VENTUNO:8080`, tagged `main`.
 
 ## 3. Put all boards in group `demo`
 
@@ -145,12 +200,12 @@ The loop is baked into the VENTUNO Q image; it needs two one-time, on-box steps
 for the full list):
 
 ```sh
-ssh root@<ventuno-q-ip>
+ssh root@VENTUNO
 mkdir -p /root/.config
 fiocli login demo http://localhost:8080
 ```
 
-A browser tab opens at `http://<ventuno-q-ip>:8080/auth/activate` — log in as
+A browser tab opens at `http://VENTUNO:8080/auth/activate` — log in as
 `admin`/`admin` and approve. `fiocli` writes its token to
 `/root/.config/fiocli.yaml` (which lives on the persistent `/var/roothome`).
 The `mkdir` is required: `fiocli` does not create the directory itself and
@@ -162,7 +217,7 @@ VENTUNO Q (it has internet at this point). Every board is provisioned the same
 way — one `curl` from the release, no on-box derivation:
 
 ```sh
-ssh root@<ventuno-q-ip>
+ssh root@VENTUNO
 cd /var/lib/poll-and-build
 
 BASE=https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01
@@ -208,7 +263,7 @@ Alternatively, if you rebuilt the IQ9 OS image, derive it from the booted IQ9:
 
 ```sh
 # On the IQ9:
-ssh -J root@<ventuno-q-ip> root@<iq9-ip>
+ssh -J root@VENTUNO root@IQ9
 mkdir -p /tmp/iq9-ostree_repo
 ostree --repo=/tmp/iq9-ostree_repo init --mode=archive
 commit=$(ostree --repo=/ostree/repo rev-parse ostree/1/1/0)
@@ -218,14 +273,18 @@ tar czf /tmp/iq9-ostree_repo.tgz -C /tmp iq9-ostree_repo
 exit
 
 # Transfer to the VENTUNO Q:
-scp root@<iq9-ip>:/tmp/iq9-ostree_repo.tgz root@<ventuno-q-ip>:/var/lib/poll-and-build/
-ssh root@<ventuno-q-ip> 'cd /var/lib/poll-and-build && tar xzf iq9-ostree_repo.tgz'
+scp root@IQ9:/tmp/iq9-ostree_repo.tgz root@VENTUNO:/var/lib/poll-and-build/
+ssh root@VENTUNO
+cd /var/lib/poll-and-build && tar xzf iq9-ostree_repo.tgz
+exit
 ```
 
-Verify:
+Verify all three refs landed:
 ```sh
-ssh root@<ventuno-q-ip> 'ostree --repo=/var/lib/poll-and-build/iq9-ostree_repo refs'
-# expect: iq-9075-evk
+ssh root@VENTUNO
+for r in ventuno-q-ostree_repo uno-q-ostree_repo iq9-ostree_repo; do echo "$r:"; ostree --repo=/var/lib/poll-and-build/$r refs; done
+# expect: ventuno-q / uno-q / iq-9075-evk
+exit
 ```
 
 The timer starts itself ~3 min after boot, then every 2 min. The repo URL is
@@ -237,7 +296,7 @@ the board and ships a Target to each device in the `demo` group automatically.
 **VENTUNO Q** — the app is reachable directly:
 
 ```sh
-open http://<ventuno-q-ip>:8000
+open http://VENTUNO:8000
 ```
 
 Say "select" then a colour (`blue green purple red yellow`) and watch the 4 RGB
@@ -247,7 +306,7 @@ LEDs on the board react.
 directly from your laptop. Tunnel through the VENTUNO Q:
 
 ```sh
-ssh -L 8000:<uno-q-ip>:8000 -J root@<ventuno-q-ip> root@<uno-q-ip>
+ssh -L 8000:UNOQ:8000 -J root@VENTUNO root@UNOQ
 # ours:
 ssh -L 8000:10.42.0.211:8000 -J root@192.168.15.99 root@10.42.0.211
 ```
@@ -259,7 +318,7 @@ Say "select" then a colour and watch the 8×13 matrix + sysfs status LEDs react.
 the VENTUNO Q:
 
 ```sh
-ssh -L 8001:<iq9-ip>:8000 -J root@<ventuno-q-ip> root@<iq9-ip>
+ssh -L 8001:IQ9:8000 -J root@VENTUNO root@IQ9
 # ours:
 ssh -L 8001:10.42.0.145:8000 -J root@192.168.15.99 root@10.42.0.145
 ```
@@ -271,7 +330,7 @@ a USB webcam or mic plugged into the IQ9 (the web UI works without one; the app
 logs `Voice runner error: There are no audio devices available` in a loop when no
 mic is present, which is harmless).
 
-The fleet view at `http://<ventuno-q-ip>:8080/devices` (`admin`/`admin`) lists
+The fleet view at `http://VENTUNO:8080/devices` (`admin`/`admin`) lists
 all three boards with their current Targets and versions.
 
 **`dorbell`** ships in the same Targets and comes up on every board at the same
@@ -284,7 +343,8 @@ enrolls the current face as a guest, `C` clears, `Q` quits). It binds no network
 port, so there is nothing to tunnel. Confirm the NPU path from the container log:
 
 ```sh
-ssh root@<ventuno-q-ip> 'docker logs $(docker ps -q -f name=dorbell) 2>&1 | grep -E "DSP|NPU"'
+ssh root@VENTUNO
+docker logs $(docker ps -q -f name=dorbell) 2>&1 | grep -E "DSP|NPU"
 ```
 
 Expect the board's own SoC (System on Chip) tag — `HTP v75, SoC=qcs8275` on the
@@ -340,7 +400,8 @@ git add apps/ && git commit -m "retrain: new keyword model" && git push
 Watch it:
 
 ```sh
-ssh root@<ventuno-q-ip> 'journalctl -u poll-and-build.service -f'
+ssh root@VENTUNO
+journalctl -u poll-and-build.service -f
 ```
 
 Expect it to finish with `rolling out … to <machine> devices: <uuids>` for each board type and `done`.
@@ -350,12 +411,13 @@ rollout at its next check (polling is ~5 s), pulls only the changed OCI blobs (a
 model swap is ~14 MB) and installs them. Because the Target carries the **same**
 OS `ostree_repo` as the flashed OS, it is an **app-only** update — no reboot.
 
-- **Fleet view** (`http://<ventuno-q-ip>:8080/devices`): the UNO Q's Target and
+- **Fleet view** (`http://VENTUNO:8080/devices`): the UNO Q's Target and
   version tick up to the new upload.
 - **On the device:**
 
   ```sh
-  ssh -J root@<ventuno-q-ip> root@<uno-q-ip> 'journalctl -u aktualizr-lite -f'
+  ssh -J root@VENTUNO root@UNOQ
+  journalctl -u aktualizr-lite -f
   ```
 
   `Installation completed; succeeded: 1` with the OS hash unchanged means it
@@ -367,8 +429,8 @@ OS `ostree_repo` as the flashed OS, it is an **app-only** update — no reboot.
 To follow the model swap on the device directly:
 
 ```sh
-ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
-    'docker logs -f $(docker ps -q -f name=webapp-led-mcu-voice-assets)'
+ssh -J root@VENTUNO root@UNOQ
+docker logs -f $(docker ps -q -f name=webapp-led-mcu-voice-assets)
 ```
 
 ## 7. If an update doesn't land
@@ -388,7 +450,7 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
   export. The app logs the model path and labels at startup.
 - **No audio at all.** The demo image bakes in `snd-usb-audio`, so a USB mic
   appears as an ALSA card on hotplug. Confirm the card is present
-  (`ssh -J root@<ventuno-q-ip> root@<uno-q-ip> arecord -l`). The voice app
+  (`ssh -J root@VENTUNO root@UNOQ arecord -l`). The voice app
   captures through the ALSA `default` PCM, selected by `PA_ALSA_DEVICE` in
   `apps/webapp-led-mcu-voice/docker-compose.yml` (`3`, the resampling `default`
   device — the raw `hw:0,0` is fixed at 44100 Hz and the model needs 16 kHz).
@@ -406,7 +468,7 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
   the VENTUNO Q (the IQ9 has no running app yet, so `composectl rm` never
   triggers there):
   ```sh
-  ssh root@<ventuno-q-ip>
+  ssh root@VENTUNO
   cd /var/lib/poll-and-build
   SHA=$(git -C repo rev-parse --short HEAD)
   tools/stage-target.sh iq-9075-evk iq9-ostree_repo webapp-led-mcu-voice webapp-led-mcu-voice-assets
@@ -427,7 +489,7 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
   rollout by UUID: find each stranded board's UUID in the `:8080` **Devices** list
   (or `fiocli devices list`) and re-point it at its own Target:
   ```sh
-  ssh root@<ventuno-q-ip>
+  ssh root@VENTUNO
   fiocli updates create-rollout voice-<sha>-ventuno fix-ventuno-<sha> --uuids <ventuno-uuid>
   fiocli updates create-rollout voice-<sha>         fix-uno-q-<sha>   --uuids <uno-q-uuid>
   fiocli updates create-rollout voice-<sha>-iq9     fix-iq9-<sha>     --uuids <iq9-uuid>
@@ -444,7 +506,7 @@ ssh -J root@<ventuno-q-ip> root@<uno-q-ip> \
   clearing its cached snapshot/targets/timestamp rows (keeping `root`, the trust
   anchor) so it re-bootstraps and accepts the server's current version:
   ```sh
-  ssh -J root@<ventuno-q-ip> root@<device-ip>
+  ssh -J root@VENTUNO root@<device-ip>
   systemctl stop aktualizr-lite
   python3 -c "import sqlite3;d=sqlite3.connect('/var/sota/sql.db');d.execute('delete from meta where repo=0 and meta_type in (1,2,3)');d.commit()"
   systemctl start aktualizr-lite

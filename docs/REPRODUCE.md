@@ -26,9 +26,9 @@ published as release assets under
 
 | Artifact | What it is | Download | Size |
 | --- | --- | --- | --- |
-| UNO Q flash image | The OS flashed on the UNO Q (QRB2210 eMMC), with `snd-usb-audio` baked in | [`uno-q-flash-image.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-flash-image.tar.gz) | 428M |
+| UNO Q flash image | The OS flashed on the UNO Q (QRB2210 eMMC), with `snd-usb-audio` baked in | [`uno-q-flash-image.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-flash-image.tar.gz) | 431M |
 | VENTUNO Q flash image | The OS flashed on the VENTUNO Q (eMMC + SAIL SPI-NOR), update-server + demo Wi-Fi | [`ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/ventuno-q-demo-image-ventuno-q.rootfs.qcomflash.tar.gz) | 851M |
-| UNO Q `ostree_repo` | The UNO Q OS half, commit `b637abb7`. `poll-and-build` copies it into every Target so updates are **app-only** (no reboot). Must match the flashed UNO Q OS exactly | [`uno-q-ostree_repo-b637abb7.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-ostree_repo-b637abb7.tgz) | 291M |
+| UNO Q `ostree_repo` | The UNO Q OS half, commit `bf492801`. `poll-and-build` copies it into every Target so updates are **app-only** (no reboot). Must match the flashed UNO Q OS exactly | [`uno-q-ostree_repo-bf492801.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/uno-q-ostree_repo-bf492801.tgz) | 291M |
 | IQ-9075 EVK flash image | The OS flashed on the IQ-9075 EVK (UFS), Weston desktop with `snd-usb-audio` baked in | [`iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/iq-9075-evk-demo-image-iq-9075-evk.rootfs.qcomflash.tar.gz) | 832M |
 | IQ-9075 EVK `ostree_repo` | The IQ-9075 EVK OS half, commit `452aa48b`. `poll-and-build` copies it into every IQ9 Target so updates are **app-only** (no reboot). Must match the flashed IQ9 OS exactly | [`iq9-ostree_repo-452aa48b.tgz`](https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01/iq9-ostree_repo-452aa48b.tgz) | 578M |
 
@@ -165,9 +165,9 @@ cd /var/lib/poll-and-build
 
 BASE=https://github.com/munoz0raul/electronica-voice-workshop/releases/download/images-2026-11-01
 
-curl -L -o uno-q-ostree_repo-b637abb7.tgz  "$BASE/uno-q-ostree_repo-b637abb7.tgz"
+curl -L -o uno-q-ostree_repo-bf492801.tgz  "$BASE/uno-q-ostree_repo-bf492801.tgz"
 mkdir uno-q-ostree_repo
-tar xzf uno-q-ostree_repo-b637abb7.tgz -C uno-q-ostree_repo --strip-components=1
+tar xzf uno-q-ostree_repo-bf492801.tgz -C uno-q-ostree_repo --strip-components=1
 
 curl -L -o iq9-ostree_repo-452aa48b.tgz "$BASE/iq9-ostree_repo-452aa48b.tgz"
 mkdir iq9-ostree_repo

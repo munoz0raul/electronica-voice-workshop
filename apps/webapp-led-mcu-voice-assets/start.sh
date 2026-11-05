@@ -47,12 +47,18 @@ if [ "$changed" = true ]; then
     echo "assets: wrote $DST"
 
     # Restart the voice app so start.sh reselects the model. Needs pid: host.
+    # Must be SIGKILL: the voice app's python is PID 1 in its own container's
+    # namespace and installs no SIGTERM handler, so a plain kill (SIGTERM) sent
+    # from this (ancestor host) namespace to that pid-ns init is dropped by the
+    # kernel and the container never restarts. SIGKILL is the one signal always
+    # delivered to a namespace init, so it reliably exits the container, which
+    # restart:unless-stopped then brings back up on the new model.
     PIDS="$(pgrep -f 'webapp-led-mcu-voice.py' 2>/dev/null || true)"
     [ -n "$PIDS" ] || PIDS="$(pgrep -f '/app/start.sh' 2>/dev/null || true)"
     if [ -n "$PIDS" ]; then
         echo "assets: restarting voice app (PIDs: $PIDS)"
         # shellcheck disable=SC2086
-        kill $PIDS 2>/dev/null || true
+        kill -9 $PIDS 2>/dev/null || true
     else
         echo "assets: voice app not running yet; it will pick up the model on start"
     fi
